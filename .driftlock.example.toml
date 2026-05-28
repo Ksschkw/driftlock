@@ -1,0 +1,42 @@
+# Driftlock configuration example.
+# All fields are optional; defaults are shown below.
+
+[[doc_mapping]]
+sources = ["src/**"]
+docs = ["README.md", "docs/"]
+
+[llm]
+# driver = "ollama"                # Uncomment for local Ollama
+driver = "openai-compatible"       # Use any OpenAI-compatible API (OpenRouter, Groq, DeepSeek, etc.)
+endpoint = "https://api.openrouter.ai"
+model = "deepseek/deepseek-chat"   # Cheap, powerful model on OpenRouter
+api_key = "${DRIFTLOCK_API_KEY}"   # Get your key at https://openrouter.ai/keys
+
+# For local Ollama, use:
+# driver = "ollama"
+# endpoint = "http://localhost:11434"
+# model = "codestral:22b"
+
+[llm.options]
+temperature = 0.0
+max_tokens = 4096
+
+# Uncomment to override prompts:
+# [llm.prompts]
+# check = '''
+# You are a documentation auditor...
+# '''
+# fix = '''
+# Fix the doc...
+# '''
+
+[behavior]
+auto_fix = true
+block_on_false = true
+max_retries = 2
+
+[audit]
+solana = false
+# rpc_endpoint = "https://api.devnet.solana.com"
+# keypair_path = "~/.config/solana/id.json"
+# program_id = ""   # Leave empty to use the default Memo program

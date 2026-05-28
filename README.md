@@ -1,3 +1,5 @@
+Here's the complete updated markdown file with the changes reflected:
+
 # Driftlock
 
 Driftlock is a commit-time gatekeeper that detects when your documentation has
@@ -5,9 +7,9 @@ fallen behind your code—and then fixes it for you.
 
 It watches every `git commit`, compares the actual structural changes (function
 signatures, types, classes) with the documentation you claim describes them,
-and if there’s a mismatch, it blocks the commit, rewrites the affected
-documentation, and tells you to stage the new version. No more “I’ll update the
-docs later.”
+and if there's a mismatch, it blocks the commit, rewrites the affected
+documentation, and tells you to stage the new version. No more "I'll update the
+docs later."
 
 Optionally, it can log an immutable audit trail to a Solana devnet contract,
 because some of you work in industries where proving that docs matched code at
@@ -71,6 +73,7 @@ flowchart TD
     LLMClient --> LLMResponse
     DiffStructural --> Parser
 ```
+
 ## Installation
 
 ### With Go
@@ -105,6 +108,11 @@ cd your-project
 driftlock init              # sets up the hook and a .driftlock.toml
 git add . && git commit -m "commit message"
 # If your docs are out of sync, the commit is blocked and the docs are updated.
+```
+
+Example function signature:
+```python
+def greet(name: str, title: str = "Mr.") -> str
 ```
 
 ## Why
