@@ -1,38 +1,44 @@
 flowchart TD
-    subgraph CLI Layer
-        Root[cmd/driftlock/root.go]
-        InitCmd[init.go]
-        HookRunCmd[hook_run.go]
-        CheckCmd[check.go]
-        FixCmd[fix.go]
-        LogCmd[log.go]
+    subgraph CLI
+        main.go --> root.go
+        root.go --> initCmd
+        root.go --> hookRunCmd
+        root.go --> checkCmd
+        root.go --> fixCmd
+        root.go --> logCmd
     end
 
     subgraph Internal
-        Config[config/config.go]
-        GitUtils[git/git.go]
-        DiffCapture[diff/capture.go]
-        DiffStructural[diff/structural.go]
-        Parser[parser/parser.go + languages.go]
-        LLMClient[llm/client.go]
-        LLMPrompt[llm/prompt.go]
-        LLMResponse[llm/response.go]
-        Updater[updater/updater.go]
-        AuditHash[audit/hash.go]
-        AuditSolana[audit/solana.go]
-        HookOrch[hook/hook.go]
+        config[config/config.go]
+        gitUtils[git/git.go]
+        diffCapture[diff/capture.go]
+        diffStructural[diff/structural.go]
+        parser[parser/parser.go + languages.go]
+        llmProvider[llm/provider.go - interface]
+        llmOpenAI[llm/adapters/openai.go]
+        llmOllama[llm/adapters/ollama.go]
+        llmCustom[llm/adapters/custom.go]
+        llmPrompt[llm/prompt.go]
+        updater[updater/updater.go]
+        auditHash[audit/hash.go]
+        auditSolana[audit/solana.go]
+        hookOrch[hook/hook.go]
     end
 
-    HookRunCmd --> HookOrch
-    HookOrch --> GitUtils
-    HookOrch --> DiffCapture
-    HookOrch --> DiffStructural
-    HookOrch --> Config
-    HookOrch --> LLMClient
-    HookOrch --> Updater
-    HookOrch --> AuditHash
-    HookOrch --> AuditSolana
+    hookRunCmd --> hookOrch
+    hookOrch --> config
+    hookOrch --> gitUtils
+    hookOrch --> diffCapture
+    hookOrch --> diffStructural
+    hookOrch --> llmProvider
+    hookOrch --> updater
+    hookOrch --> auditHash
+    hookOrch --> auditSolana
 
-    LLMClient --> LLMPrompt
-    LLMClient --> LLMResponse
-    DiffStructural --> Parser
+    diffStructural --> parser
+    llmProvider --> llmOpenAI
+    llmProvider --> llmOllama
+    llmProvider --> llmCustom
+    llmOpenAI --> llmPrompt
+    llmOllama --> llmPrompt
+    llmCustom --> llmPrompt
