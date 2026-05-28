@@ -13,6 +13,64 @@ Optionally, it can log an immutable audit trail to a Solana devnet contract,
 because some of you work in industries where proving that docs matched code at
 every commit is a regulatory requirement.
 
+## High-Level
+```mermaid
+flowchart TD
+    A[git commit] --> B[Git pre-commit hook]
+    B --> C[driftlock hook-run]
+    C --> D{Capture staged diff}
+    D --> E[AST structural extraction]
+    E --> F{Map changed files to docs}
+    F --> G[Read current doc content]
+    G --> H[LLM Check: TRUE/FALSE?]
+    H -->|TRUE| I["Log hash (optional), exit 0"]
+    H -->|FALSE| J[LLM Fix: generate updated doc]
+    J --> K[Write updated doc to working tree]
+    K --> L[Print message: docs updated, commit blocked]
+    L --> M[exit 1]
+```
+
+## Low level component diagram
+```mermaid
+flowchart TD
+    subgraph CLI Layer
+        Root[cmd/driftlock/root.go]
+        InitCmd[init.go]
+        HookRunCmd[hook_run.go]
+        CheckCmd[check.go]
+        FixCmd[fix.go]
+        LogCmd[log.go]
+    end
+
+    subgraph Internal
+        Config[config/config.go]
+        GitUtils[git/git.go]
+        DiffCapture[diff/capture.go]
+        DiffStructural[diff/structural.go]
+        Parser[parser/parser.go + languages.go]
+        LLMClient[llm/client.go]
+        LLMPrompt[llm/prompt.go]
+        LLMResponse[llm/response.go]
+        Updater[updater/updater.go]
+        AuditHash[audit/hash.go]
+        AuditSolana[audit/solana.go]
+        HookOrch[hook/hook.go]
+    end
+
+    HookRunCmd --> HookOrch
+    HookOrch --> GitUtils
+    HookOrch --> DiffCapture
+    HookOrch --> DiffStructural
+    HookOrch --> Config
+    HookOrch --> LLMClient
+    HookOrch --> Updater
+    HookOrch --> AuditHash
+    HookOrch --> AuditSolana
+
+    LLMClient --> LLMPrompt
+    LLMClient --> LLMResponse
+    DiffStructural --> Parser
+```
 ## Installation
 
 ### With Go

@@ -1,0 +1,38 @@
+flowchart TD
+    subgraph CLI Layer
+        Root[cmd/driftlock/root.go]
+        InitCmd[init.go]
+        HookRunCmd[hook_run.go]
+        CheckCmd[check.go]
+        FixCmd[fix.go]
+        LogCmd[log.go]
+    end
+
+    subgraph Internal
+        Config[config/config.go]
+        GitUtils[git/git.go]
+        DiffCapture[diff/capture.go]
+        DiffStructural[diff/structural.go]
+        Parser[parser/parser.go + languages.go]
+        LLMClient[llm/client.go]
+        LLMPrompt[llm/prompt.go]
+        LLMResponse[llm/response.go]
+        Updater[updater/updater.go]
+        AuditHash[audit/hash.go]
+        AuditSolana[audit/solana.go]
+        HookOrch[hook/hook.go]
+    end
+
+    HookRunCmd --> HookOrch
+    HookOrch --> GitUtils
+    HookOrch --> DiffCapture
+    HookOrch --> DiffStructural
+    HookOrch --> Config
+    HookOrch --> LLMClient
+    HookOrch --> Updater
+    HookOrch --> AuditHash
+    HookOrch --> AuditSolana
+
+    LLMClient --> LLMPrompt
+    LLMClient --> LLMResponse
+    DiffStructural --> Parser

@@ -1,0 +1,13 @@
+flowchart TD
+    A[git commit] --> B[Git pre-commit hook]
+    B --> C[driftlock hook-run]
+    C --> D{Capture staged diff}
+    D --> E[AST structural extraction]
+    E --> F{Map changed files to docs}
+    F --> G[Read current doc content]
+    G --> H[LLM Check: TRUE/FALSE?]
+    H -->|TRUE| I["Log hash (optional), exit 0"]
+    H -->|FALSE| J[LLM Fix: generate updated doc]
+    J --> K[Write updated doc to working tree]
+    K --> L[Print message: docs updated, commit blocked]
+    L --> M[exit 1]
