@@ -1,5 +1,3 @@
-Here's the complete updated markdown file with the changes reflected:
-
 # Driftlock
 
 Driftlock is a commit-time gatekeeper that detects when your documentation has
