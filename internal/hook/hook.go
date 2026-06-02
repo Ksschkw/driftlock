@@ -64,6 +64,15 @@ func RunWithOptions(ctx context.Context, dryRun bool) error {
 		return fmt.Errorf("failed to create LLM provider: %w", err)
 	}
 
+	// Pre-fetch full diff if needed
+	var fullDiff string
+	if cfg.Behavior.IncludeFullDiff {
+		fullDiff, err = git.GetStagedDiff()
+		if err != nil {
+			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not get full diff: %v\n", err)))
+		}
+	}
+
 	anyOutOfSync := false
 	anyLLMError := false
 
@@ -84,6 +93,10 @@ func RunWithOptions(ctx context.Context, dryRun bool) error {
 				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not read staged version of %s: %v\n", src, err)))
 				continue
 			}
+			// Skip deleted files (newContent will be empty and oldContent may have content, but no actual signature to compare)
+			if newContent == "" && oldContent != "" {
+				continue
+			}
 			changes := diff.ExtractStructuralChanges(src, oldContent, newContent)
 			allChanges = append(allChanges, changes...)
 		}
@@ -99,10 +112,15 @@ func RunWithOptions(ctx context.Context, dryRun bool) error {
 			continue
 		}
 		diffText := diff.FormatStructuralChanges(allChanges)
-		docText := string(docContent)
+
+		// Choose which diff to send to the LLM
+		diffForLLM := diffText
+		if cfg.Behavior.IncludeFullDiff && fullDiff != "" {
+			diffForLLM = fullDiff
+		}
 
 		// LLM check with retries
-		result := checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffText, docText)
+		result := checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffForLLM, string(docContent))
 
 		if result.err != nil {
 			anyLLMError = true
@@ -110,7 +128,6 @@ func RunWithOptions(ctx context.Context, dryRun bool) error {
 			continue
 		}
 
-		// Print result with color
 		if result.ok {
 			fmt.Fprint(os.Stderr, output.GreenStr(fmt.Sprintf("driftlock: %s => TRUE %s\n", docPath, result.explanation)))
 		} else {
@@ -120,7 +137,7 @@ func RunWithOptions(ctx context.Context, dryRun bool) error {
 
 		// Auto-fix if needed
 		if !result.ok && cfg.Behavior.AutoFix && !dryRun {
-			newDoc, err := provider.Fix(ctx, diffText, docText)
+			newDoc, err := provider.Fix(ctx, diffForLLM, string(docContent))
 			if err != nil {
 				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("auto-fix failed for %s: %v\n", docPath, err)))
 				continue
@@ -133,7 +150,7 @@ func RunWithOptions(ctx context.Context, dryRun bool) error {
 		}
 
 		// Audit hash (log regardless)
-		hash := audit.ComputeHash(diffText, docText)
+		hash := audit.ComputeHash(diffText, string(docContent))
 		if err := audit.LogHash(root, hash, sourceFiles); err != nil {
 			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: audit logging failed: %v\n", err)))
 		}
@@ -152,7 +169,7 @@ func RunWithOptions(ctx context.Context, dryRun bool) error {
 	if anyOutOfSync {
 		if cfg.Behavior.BlockOnFalse && !dryRun {
 			fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: documentation out of sync. Review the updated files and stage them.\n"))
-			os.Exit(1) // ensures pre-commit fails
+			os.Exit(1)
 		}
 		if dryRun {
 			return fmt.Errorf("documentation drift detected")
@@ -191,6 +208,9 @@ func FixAll(ctx context.Context) error {
 			}
 			oldContent, _ := git.GetFileContentAtHEAD(src)
 			newContent, _ := git.GetStagedFileContent(src)
+			if newContent == "" && oldContent != "" {
+				continue
+			}
 			changes := diff.ExtractStructuralChanges(src, oldContent, newContent)
 			allChanges = append(allChanges, changes...)
 		}

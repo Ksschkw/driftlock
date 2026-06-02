@@ -20,7 +20,7 @@ func GetStagedDiff() (string, error) {
 }
 
 // GetFileContentAtHEAD returns the content of a file at HEAD.
-// If the file does not exist in HEAD (new file), it returns an empty string with no error.
+// If the file does not exist in HEAD (new file), returns empty string with no error.
 func GetFileContentAtHEAD(filePath string) (string, error) {
 	cmd := exec.Command("git", "show", "HEAD:"+filePath)
 	var out bytes.Buffer
@@ -39,13 +39,25 @@ func GetFileContentAtHEAD(filePath string) (string, error) {
 }
 
 // GetStagedFileContent returns the content of a staged file.
+// If the file has been deleted, returns empty string with no error.
 func GetStagedFileContent(filePath string) (string, error) {
+	// Check if the file is deleted in the staging area
+	cmdStatus := exec.Command("git", "diff", "--cached", "--name-status", "--", filePath)
+	outStatus, err := cmdStatus.Output()
+	if err == nil && strings.HasPrefix(string(outStatus), "D") {
+		return "", nil // deleted file, no content
+	}
+
 	cmd := exec.Command("git", "show", ":"+filePath)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git show (staged) failed for %s: %v\noutput: %s", filePath, err, out.String())
+		errStr := out.String()
+		if strings.Contains(errStr, "does not exist") {
+			return "", nil
+		}
+		return "", fmt.Errorf("git show (staged) failed for %s: %v\noutput: %s", filePath, err, errStr)
 	}
 	return out.String(), nil
 }

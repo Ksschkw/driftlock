@@ -40,9 +40,10 @@ type PromptConfig struct {
 
 // BehaviorConfig controls how Driftlock acts.
 type BehaviorConfig struct {
-	AutoFix      bool `toml:"auto_fix"`
-	BlockOnFalse bool `toml:"block_on_false"`
-	MaxRetries   int  `toml:"max_retries"`
+	AutoFix         bool `toml:"auto_fix"`
+	BlockOnFalse    bool `toml:"block_on_false"`
+	MaxRetries      int  `toml:"max_retries"`
+	IncludeFullDiff bool `toml:"include_full_diff"`
 }
 
 // AuditConfig holds the optional Solana audit settings.
@@ -72,9 +73,10 @@ func DefaultConfig() *Config {
 			},
 		},
 		Behavior: BehaviorConfig{
-			AutoFix:      true,
-			BlockOnFalse: true,
-			MaxRetries:   2,
+			AutoFix:         true,
+			BlockOnFalse:    true,
+			MaxRetries:      2,
+			IncludeFullDiff: false,
 		},
 		Audit: AuditConfig{
 			Solana: false,
