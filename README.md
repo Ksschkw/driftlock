@@ -92,21 +92,31 @@ your config. This gives the LLM more context to write richer documentation.
 
 ## Installation
 
-### Pre‑built binary
-
-Download the latest binary for your platform from the
-[Releases page](https://github.com/Ksschkw/driftlock/releases). Place it
-somewhere in your `PATH` (e.g., `/usr/local/bin`).
-
-### Shell installer
+### Unix (Linux & macOS)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Ksschkw/driftlock/main/install.sh | sh
 ```
 
-This script detects your OS and architecture, downloads the correct binary,
-verifies its SHA‑256 checksum, and installs it to `/usr/local/bin`. Inspect the
-script before running if you prefer.
+This script downloads the latest binary, verifies the SHA‑256 checksum, and
+installs to `/usr/local/bin`. You can override the install directory with the
+`PREFIX` environment variable:
+
+```bash
+PREFIX=$HOME/.local/bin curl -fsSL ... | sh
+```
+
+### Windows
+
+Open PowerShell and run:
+
+```powershell
+Set-ExecutionPolicy Bypass -Scope Process -Force
+iwr https://raw.githubusercontent.com/Ksschkw/driftlock/main/install.ps1 -UseBasicParsing | iex
+```
+
+This installs `driftlock.exe` to `%LOCALAPPDATA%\Programs\driftlock` and adds it
+to your user `PATH`.
 
 ### Via Go
 
@@ -115,6 +125,15 @@ go install github.com/Ksschkw/driftlock/cmd/driftlock@latest
 ```
 
 Requires Go 1.22 or later.
+
+### Manual download
+
+Grab the correct binary for your platform from the
+[Releases page](https://github.com/Ksschkw/driftlock/releases). Place it
+somewhere in your `PATH`.
+
+---
+
 
 ---
 
