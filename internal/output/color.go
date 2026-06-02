@@ -40,6 +40,8 @@ func YellowStr(s string) string {
 	return Yellow + s + Reset
 }
 
+// I am adding this line to test ts
+
 func BoldStr(s string) string {
 	return Bold + s + Reset
 }
