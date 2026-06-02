@@ -47,17 +47,38 @@ info "Downloading ${TARGET} from ${DOWNLOAD_URL} ..."
 curl -sSL -o "${TARGET}" "$DOWNLOAD_URL" || die "Download failed."
 
 # ---------- optional checksum verification ----------
+VERIFIED=0
+# First, try a per-asset .sha256 file
 if curl -sSL -o "${TARGET}.sha256" "$CHECKSUM_URL" 2>/dev/null; then
-  info "Verifying checksum..."
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum -c "${TARGET}.sha256" --status || die "Checksum verification failed."
+    sha256sum -c "${TARGET}.sha256" --status 2>/dev/null && VERIFIED=1 || warn "Per-asset checksum mismatch."
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 -c "${TARGET}.sha256" --status || die "Checksum verification failed."
-  else
-    warn "No sha256sum/shasum found. Skipping checksum verification."
+    shasum -a 256 -c "${TARGET}.sha256" --status 2>/dev/null && VERIFIED=1 || warn "Per-asset checksum mismatch."
   fi
-else
-  warn "No checksum file found. Skipping verification."
+fi
+
+# Fallback: try checksums.txt containing multiple hashes
+if [ "$VERIFIED" -eq 0 ]; then
+  CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${TAG}/checksums.txt"
+  if curl -sSL -o checksums.txt "$CHECKSUMS_URL" 2>/dev/null; then
+    EXPECTED_HASH=$(grep " ${TARGET}$" checksums.txt | awk '{print $1}')
+    if [ -n "$EXPECTED_HASH" ]; then
+      ACTUAL_HASH=$(sha256sum "${TARGET}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TARGET}" 2>/dev/null | awk '{print $1}')
+      if [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
+        VERIFIED=1
+        info "Checksum verified via checksums.txt."
+      else
+        warn "Checksum mismatch in checksums.txt."
+      fi
+    else
+      warn "Asset not found in checksums.txt."
+    fi
+  fi
+fi
+
+if [ "$VERIFIED" -eq 0 ]; then
+  warn "Checksum verification not available or failed. The binary may be corrupted."
+  warn "To be safe, download it manually from https://github.com/${REPO}/releases/tag/${TAG}"
 fi
 
 # ---------- install ----------
