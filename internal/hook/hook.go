@@ -162,8 +162,12 @@ func RunWithOptions(ctx context.Context, dryRun bool) error {
 	}
 
 	// Final messaging
+	// Final messaging
 	if anyLLMError {
 		fmt.Fprint(os.Stderr, output.YellowStr("\ndriftlock: Some documentation checks could not be completed due to LLM errors. Review manually.\n"))
+	} else if !anyOutOfSync && len(docMap) > 0 {
+		// We checked docs but found no drift – tell the user.
+		fmt.Fprint(os.Stderr, output.GreenStr("driftlock: No structural changes in mapped sources; documentation check skipped.\n"))
 	}
 
 	if anyOutOfSync {
