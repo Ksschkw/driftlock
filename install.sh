@@ -1,32 +1,88 @@
-#!/usr/bin/env bash
-# install.sh – install driftlock binary and set up PATH
+#!/bin/sh
 set -e
 
-BIN_DIR="/usr/local/bin"
-BINARY_NAME="driftlock"
+REPO="Ksschkw/driftlock"
+BIN_NAME="driftlock"
+DEFAULT_PREFIX="/usr/local/bin"
 
-# Determine OS and architecture
+# ---------- helpers ----------
+info()  { printf '\033[1;32m[driftlock-install]\033[0m %s\n' "$1"; }
+warn()  { printf '\033[1;33m[driftlock-install]\033[0m %s\n' "$1" >&2; }
+die()   { warn "$1"; exit 1; }
+
+# ---------- detect OS / arch ----------
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 
-case "$ARCH" in
-    x86_64)  ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
-    armv7l)  ARCH="armv7" ;;
+case "$OS" in
+  linux)  os="linux" ;;
+  darwin) os="darwin" ;;
+  *) die "Unsupported OS: $OS" ;;
 esac
 
-VERSION="0.1.0"  # update on each release
-REPO="Ksschkw/driftlock"
-URL="https://github.com/${REPO}/releases/download/v${VERSION}/${BINARY_NAME}-${OS}-${ARCH}"
+case "$ARCH" in
+  x86_64|amd64)  arch="amd64" ;;
+  arm64|aarch64) arch="arm64" ;;
+  *) die "Unsupported architecture: $ARCH" ;;
+esac
 
-echo "Downloading driftlock v${VERSION} for ${OS}/${ARCH}..."
-curl -fsSL "$URL" -o "/tmp/${BINARY_NAME}"
-sha256=$(curl -fsSL "${URL}.sha256" | cut -d ' ' -f 1)
-echo "${sha256}  /tmp/${BINARY_NAME}" | sha256sum --check
-chmod +x "/tmp/${BINARY_NAME}"
+TARGET="${BIN_NAME}-${os}-${arch}"
+if [ "$os" = "windows" ]; then
+  TARGET="${TARGET}.exe"
+fi
 
-echo "Installing to ${BIN_DIR}/${BINARY_NAME}..."
-sudo mv "/tmp/${BINARY_NAME}" "${BIN_DIR}/${BINARY_NAME}"
+# ---------- fetch latest release tag ----------
+info "Fetching latest release..."
+TAG=$(curl -s https://api.github.com/repos/${REPO}/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+[ -z "$TAG" ] && die "Could not determine latest release tag."
 
-echo "Driftlock installed successfully."
-echo "Test it with: driftlock --help"
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${TARGET}"
+CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
+
+# ---------- download ----------
+TMPDIR=$(mktemp -d)
+cd "$TMPDIR"
+
+info "Downloading ${TARGET} from ${DOWNLOAD_URL} ..."
+curl -sSL -o "${TARGET}" "$DOWNLOAD_URL" || die "Download failed."
+
+# ---------- optional checksum verification ----------
+if curl -sSL -o "${TARGET}.sha256" "$CHECKSUM_URL" 2>/dev/null; then
+  info "Verifying checksum..."
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum -c "${TARGET}.sha256" --status || die "Checksum verification failed."
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 -c "${TARGET}.sha256" --status || die "Checksum verification failed."
+  else
+    warn "No sha256sum/shasum found. Skipping checksum verification."
+  fi
+else
+  warn "No checksum file found. Skipping verification."
+fi
+
+# ---------- install ----------
+PREFIX="${PREFIX:-$DEFAULT_PREFIX}"
+if [ ! -d "$PREFIX" ]; then
+  mkdir -p "$PREFIX" || die "Cannot create $PREFIX. Try setting PREFIX=\$HOME/.local/bin"
+fi
+
+INSTALL_PATH="${PREFIX}/${BIN_NAME}"
+install -m 755 "${TARGET}" "$INSTALL_PATH" 2>/dev/null || {
+  warn "install command not found, using cp..."
+  cp -f "${TARGET}" "$INSTALL_PATH" && chmod +x "$INSTALL_PATH"
+}
+
+info "Driftlock installed to ${INSTALL_PATH}"
+
+# ---------- PATH check ----------
+case ":$PATH:" in
+  *:"$PREFIX":*) ;;
+  *)
+    warn "Installation directory ${PREFIX} is not in your PATH."
+    warn "Add 'export PATH=\$PATH:${PREFIX}' to your shell profile and restart your terminal."
+    ;;
+esac
+
+cd /
+rm -rf "$TMPDIR"
+info "Done. Run 'driftlock init' inside a Git repository to get started."

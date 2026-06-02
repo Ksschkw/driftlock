@@ -2,3 +2,6 @@ set*.sh
 .driftlock.toml
 .driftlock/
 .env
+driftlock
+driftlock-*
+checksums.txt
