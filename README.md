@@ -106,11 +106,6 @@ git add . && git commit -m "commit message"
 # If your docs are out of sync, the commit is blocked and the docs are updated.
 ```
 
-Example function signature:
-```python
-def greet(name: str, title: str = "Mr.", root: str = "") -> str
-```
-
 ## Why
 
 Because out-of-date documentation is technical debt that compiles. Driftlock
