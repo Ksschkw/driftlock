@@ -25,22 +25,57 @@ $Installer = Join-Path $TempDir $Target
 Write-Host "Downloading $Target from $DownloadUrl ..."
 Invoke-WebRequest -Uri $DownloadUrl -OutFile $Installer
 
-# optional checksum
+# ---------- checksum verification ----------
+$Verified = $false
+
+# Try per-asset .sha256
 $ChecksumUrl = "$DownloadUrl.sha256"
 try {
     $ChecksumFile = Join-Path $TempDir "$Target.sha256"
     Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumFile
-    $ExpectedHash = (Get-Content $ChecksumFile).Split()[0]
+    $ExpectedHash = (Get-Content $ChecksumFile -First 1).Split()[0]
     $ActualHash = (Get-FileHash -Path $Installer -Algorithm SHA256).Hash
-    if ($ExpectedHash -ne $ActualHash) {
-        throw "Checksum mismatch! Expected $ExpectedHash, got $ActualHash"
+    if ($ExpectedHash -eq $ActualHash) {
+        $Verified = $true
+        Write-Host "Checksum verified (per-asset)." -ForegroundColor Green
+    } else {
+        Write-Host "Per-asset checksum mismatch." -ForegroundColor Yellow
     }
-    Write-Host "Checksum verified." -ForegroundColor Green
 } catch {
-    Write-Host "Could not verify checksum (or file missing). Continuing..." -ForegroundColor Yellow
+    Write-Host "Per-asset checksum file not found, trying checksums.txt..." -ForegroundColor Yellow
 }
 
-# install
+# Fallback: checksums.txt
+if (-not $Verified) {
+    $ChecksumsUrl = "https://github.com/$Repo/releases/download/$Tag/checksums.txt"
+    try {
+        $ChecksumsFile = Join-Path $TempDir "checksums.txt"
+        Invoke-WebRequest -Uri $ChecksumsUrl -OutFile $ChecksumsFile
+        $lines = Get-Content $ChecksumsFile
+        $match = $lines | Where-Object { $_ -match "(\S+)\s+${Target}$" }
+        if ($match) {
+            $ExpectedHash = $match.Split()[0]
+            $ActualHash = (Get-FileHash -Path $Installer -Algorithm SHA256).Hash
+            if ($ExpectedHash -eq $ActualHash) {
+                $Verified = $true
+                Write-Host "Checksum verified via checksums.txt." -ForegroundColor Green
+            } else {
+                Write-Host "Checksum mismatch in checksums.txt." -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "Asset not found in checksums.txt." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "Could not download checksums.txt." -ForegroundColor Yellow
+    }
+}
+
+if (-not $Verified) {
+    Write-Host "Checksum verification not available or failed. The binary may be corrupted." -ForegroundColor Yellow
+    Write-Host "To be safe, download it manually from https://github.com/$Repo/releases/tag/$Tag" -ForegroundColor Yellow
+}
+
+# ---------- install ----------
 $Prefix = if ($env:DRIFTLOCK_PREFIX) { $env:DRIFTLOCK_PREFIX } else { $DefaultPrefix }
 if (-not (Test-Path $Prefix)) { New-Item -ItemType Directory -Force -Path $Prefix | Out-Null }
 $ExePath = Join-Path $Prefix "$BinName.exe"

@@ -37,7 +37,6 @@ TAG=$(curl -s https://api.github.com/repos/${REPO}/releases/latest | grep '"tag_
 [ -z "$TAG" ] && die "Could not determine latest release tag."
 
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${TARGET}"
-CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
 
 # ---------- download ----------
 TMPDIR=$(mktemp -d)
@@ -46,25 +45,32 @@ cd "$TMPDIR"
 info "Downloading ${TARGET} from ${DOWNLOAD_URL} ..."
 curl -sSL -o "${TARGET}" "$DOWNLOAD_URL" || die "Download failed."
 
-# ---------- optional checksum verification ----------
+# ---------- checksum verification ----------
 VERIFIED=0
-# First, try a per-asset .sha256 file
+
+# Try per-asset .sha256
+CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
 if curl -sSL -o "${TARGET}.sha256" "$CHECKSUM_URL" 2>/dev/null; then
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum -c "${TARGET}.sha256" --status 2>/dev/null && VERIFIED=1 || warn "Per-asset checksum mismatch."
-  elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 -c "${TARGET}.sha256" --status 2>/dev/null && VERIFIED=1 || warn "Per-asset checksum mismatch."
+  EXPECTED=$(head -n1 "${TARGET}.sha256" | awk '{print $1}')
+  if [ -n "$EXPECTED" ]; then
+    ACTUAL=$(sha256sum "${TARGET}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TARGET}" 2>/dev/null | awk '{print $1}')
+    if [ "$EXPECTED" = "$ACTUAL" ]; then
+      VERIFIED=1
+      info "Checksum verified (per-asset)."
+    else
+      warn "Per-asset checksum mismatch."
+    fi
   fi
 fi
 
-# Fallback: try checksums.txt containing multiple hashes
+# Fallback: checksums.txt
 if [ "$VERIFIED" -eq 0 ]; then
   CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${TAG}/checksums.txt"
   if curl -sSL -o checksums.txt "$CHECKSUMS_URL" 2>/dev/null; then
-    EXPECTED_HASH=$(grep " ${TARGET}$" checksums.txt | awk '{print $1}')
-    if [ -n "$EXPECTED_HASH" ]; then
-      ACTUAL_HASH=$(sha256sum "${TARGET}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TARGET}" 2>/dev/null | awk '{print $1}')
-      if [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
+    EXPECTED=$(grep " ${TARGET}$" checksums.txt | awk '{print $1}')
+    if [ -n "$EXPECTED" ]; then
+      ACTUAL=$(sha256sum "${TARGET}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TARGET}" 2>/dev/null | awk '{print $1}')
+      if [ "$EXPECTED" = "$ACTUAL" ]; then
         VERIFIED=1
         info "Checksum verified via checksums.txt."
       else
@@ -83,15 +89,34 @@ fi
 
 # ---------- install ----------
 PREFIX="${PREFIX:-$DEFAULT_PREFIX}"
-if [ ! -d "$PREFIX" ]; then
-  mkdir -p "$PREFIX" || die "Cannot create $PREFIX. Try setting PREFIX=\$HOME/.local/bin"
-fi
-
 INSTALL_PATH="${PREFIX}/${BIN_NAME}"
-install -m 755 "${TARGET}" "$INSTALL_PATH" 2>/dev/null || {
-  warn "install command not found, using cp..."
+
+# Helper to actually copy and set permissions
+do_install() {
   cp -f "${TARGET}" "$INSTALL_PATH" && chmod +x "$INSTALL_PATH"
 }
+
+# Try a user-writable prefix first if the default is not writable
+if [ ! -w "$PREFIX" ] && [ ! -w "$(dirname "$INSTALL_PATH")" ]; then
+  warn "$PREFIX is not writable. Attempting sudo..."
+  if command -v sudo >/dev/null 2>&1; then
+    sudo cp -f "${TARGET}" "$INSTALL_PATH" && sudo chmod +x "$INSTALL_PATH" || {
+      warn "sudo failed. Falling back to \$HOME/.local/bin"
+      PREFIX="$HOME/.local/bin"
+      INSTALL_PATH="${PREFIX}/${BIN_NAME}"
+      mkdir -p "$PREFIX"
+      do_install
+    }
+  else
+    warn "sudo not found. Falling back to \$HOME/.local/bin"
+    PREFIX="$HOME/.local/bin"
+    INSTALL_PATH="${PREFIX}/${BIN_NAME}"
+    mkdir -p "$PREFIX"
+    do_install
+  fi
+else
+  do_install
+fi
 
 info "Driftlock installed to ${INSTALL_PATH}"
 
