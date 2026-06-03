@@ -18,14 +18,13 @@ func ResolveDocMapping(entries []DocMapEntry, stagedFiles []string, root string)
 					return nil, err
 				}
 				if !match {
-					// Check if the staged file is within the glob's directory tree.
 					if strings.HasPrefix(staged, strings.TrimSuffix(srcGlob, "**")) {
 						match = true
 					}
 				}
 				if match {
 					for _, doc := range entry.Docs {
-						resolvedDocs, err := resolveDocPath(doc, root)
+						resolvedDocs, err := ResolveDocPath(doc, root)
 						if err != nil {
 							return nil, err
 						}
@@ -40,9 +39,9 @@ func ResolveDocMapping(entries []DocMapEntry, stagedFiles []string, root string)
 	return docMap, nil
 }
 
-// resolveDocPath takes a doc path from config (which may be a directory or a glob) and returns
+// ResolveDocPath takes a doc path from config (which may be a directory or a glob) and returns
 // the concrete .md file paths relative to the project root.
-func resolveDocPath(doc string, root string) ([]string, error) {
+func ResolveDocPath(doc string, root string) ([]string, error) {
 	// If it ends with a separator, treat as a directory and list *.md inside.
 	if strings.HasSuffix(doc, string(filepath.Separator)) {
 		dir := filepath.Join(root, doc)
@@ -51,7 +50,6 @@ func resolveDocPath(doc string, root string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Convert to relative paths
 		var rel []string
 		for _, m := range matches {
 			r, err := filepath.Rel(root, m)
@@ -62,7 +60,7 @@ func resolveDocPath(doc string, root string) ([]string, error) {
 		return rel, nil
 	}
 
-	// Check if it's an existing directory (the user might have written "docs" without a trailing slash).
+	// Check if it's an existing directory without trailing slash
 	fullPath := filepath.Join(root, doc)
 	if info, err := os.Stat(fullPath); err == nil && info.IsDir() {
 		pattern := filepath.Join(fullPath, "*.md")
@@ -80,6 +78,6 @@ func resolveDocPath(doc string, root string) ([]string, error) {
 		return rel, nil
 	}
 
-	// Otherwise, assume it's a direct file path.
+	// Assume it's a direct file path.
 	return []string{doc}, nil
 }

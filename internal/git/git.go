@@ -77,3 +77,19 @@ func ListStagedFiles() ([]string, error) {
 	}
 	return files, nil
 }
+
+// ListTrackedFiles returns all files tracked by Git in the current working directory.
+func ListTrackedFiles() ([]string, error) {
+	cmd := exec.Command("git", "ls-files")
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git ls-files failed: %v\noutput: %s", err, out.String())
+	}
+	files := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(files) == 1 && files[0] == "" {
+		return nil, nil
+	}
+	return files, nil
+}
