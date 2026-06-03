@@ -15,21 +15,15 @@ import (
 	"github.com/Ksschkw/driftlock/internal/parser"
 )
 
-// StatusCheck runs a full‑repo check: for every documentation file, it gathers
-// all function signatures from the mapped source files (HEAD) and asks the LLM
-// whether the documentation covers them all. Results are printed to stderr.
 func StatusCheck(ctx context.Context) error {
 	cfg, err := config.LoadProjectConfig()
 	if err != nil {
 		return err
 	}
-
 	root, err := config.FindProjectRoot()
 	if err != nil {
 		return err
 	}
-
-	// Build doc map from all tracked files, not just staged
 	docMap, err := buildStatusDocMap(cfg.DocMapping, root)
 	if err != nil {
 		return err
@@ -44,7 +38,7 @@ func StatusCheck(ctx context.Context) error {
 		return fmt.Errorf("failed to create LLM provider: %w", err)
 	}
 
-	anyOutOfSync := false
+	anyDrift := false
 
 	for docPath, sourceFiles := range docMap {
 		var sigList []string
@@ -59,9 +53,8 @@ func StatusCheck(ctx context.Context) error {
 				sigList = append(sigList, fmt.Sprintf("%s: %s", src, sig.Signature))
 			}
 		}
-
 		if len(sigList) == 0 {
-			fmt.Fprint(os.Stderr, output.GreenStr(fmt.Sprintf("driftlock: %s => no signatures found; skipping.\n", docPath)))
+			fmt.Fprint(os.Stderr, output.GreenStr(fmt.Sprintf("driftlock: %s → no signatures found; skipping.\n", docPath)))
 			continue
 		}
 
@@ -71,29 +64,28 @@ func StatusCheck(ctx context.Context) error {
 			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not read doc %s: %v\n", docPath, err)))
 			continue
 		}
-
 		sigText := strings.Join(sigList, "\n")
 		ok, explanation, err := checkDocCoverage(ctx, provider, sigText, string(docContent))
 		if err != nil {
-			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("driftlock: %s => LLM error: %v\n", docPath, err)))
+			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("driftlock: %s → LLM error: %v\n", docPath, err)))
 			continue
 		}
 
+		cleanExplanation := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(explanation), "TRUE. "), "FALSE. ")
 		if ok {
-			fmt.Fprint(os.Stderr, output.GreenStr(fmt.Sprintf("driftlock: %s => TRUE %s\n", docPath, explanation)))
+			fmt.Fprint(os.Stderr, output.GreenStr(fmt.Sprintf("driftlock: %s → up to date (%s)\n", docPath, cleanExplanation)))
 		} else {
-			fmt.Fprint(os.Stderr, output.RedStr(fmt.Sprintf("driftlock: %s => FALSE %s\n", docPath, explanation)))
-			anyOutOfSync = true
+			fmt.Fprint(os.Stderr, output.RedStr(fmt.Sprintf("driftlock: %s → outdated (%s)\n", docPath, cleanExplanation)))
+			anyDrift = true
 		}
 	}
 
-	if anyOutOfSync {
+	if anyDrift {
 		return fmt.Errorf("documentation drift detected")
 	}
 	return nil
 }
 
-// checkDocCoverage sends a prompt asking whether the given signatures are covered by the doc.
 func checkDocCoverage(ctx context.Context, provider types.Provider, signatures, doc string) (bool, string, error) {
 	prompt := fmt.Sprintf(`You are a documentation auditor. Below is a list of function signatures from the source code and the current documentation file.
 
@@ -106,6 +98,8 @@ Documentation:
 Does the documentation accurately cover all of these signatures? Answer exactly TRUE or FALSE, then a one‑sentence explanation.`, signatures, doc)
 	return provider.Check(ctx, prompt, doc)
 }
+
+// buildStatusDocMap unchanged (but we need to import config and use ResolveDocPath)
 
 // buildStatusDocMap resolves doc_mapping entries to a map of doc path -> source files
 // using all tracked files in the repository.
