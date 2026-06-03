@@ -1,12 +1,18 @@
+// Package parser extracts function / method / type signatures from source code
+// in any programming language, using a universal set of patterns.
 package parser
 
-// Signature represents a function/method signature.
+// Signature holds a function/method/type name and its full signature string.
 type Signature struct {
 	Name      string
-	Signature string // full signature as string
+	Signature string
 }
 
-// LanguageParser defines the interface for extracting signatures from source code.
-type LanguageParser interface {
-	ExtractSignatures(source string) []Signature
+// ExtractSignatures detects any structural declaration in the source and
+// returns all found signatures. It works for every programming language
+// (Python, Go, Rust, C, Java, JavaScript, Ruby, PHP, Lua, Julia, SQL, bash,
+//
+//	and many more) as well as markup / data languages (JSON, YAML, XML, etc.).
+func ExtractSignatures(filePath string, source string) []Signature {
+	return extractSignaturesUniversal(source)
 }

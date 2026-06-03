@@ -4,8 +4,8 @@
 falls behind your code. It watches every `git commit`, detects when a
 structural change to your code (function signatures, class methods, exported
 types) is not reflected in your Markdown docs, and either blocks the commit
-or **automatically rewrites the documentation** to match. No more “I’ll update
-the docs later” – Driftlock makes stale documentation a build failure.
+or **automatically rewrites the documentation** to match. No more "I'll update
+the docs later" – Driftlock makes stale documentation a build failure.
 
 Optionally, Driftlock can log an immutable audit trail to a Solana devnet
 contract, giving you cryptographic proof that documentation matched code at the
@@ -59,22 +59,34 @@ git commit
 
 Driftlock is **not** a simple text‑diff checker. It only triggers when the
 **API‑visible surface** of your code changes. It will stay completely silent
-for cosmetic changes, comment edits, or internal refactors that don’t alter
+for cosmetic changes, comment edits, or internal refactors that don't alter
 public signatures.
 
 ---
 
 ## What Counts as a Structural Change
 
-Driftlock uses language‑specific parsers to extract **function and method
-signatures** (name, parameters, return types). Currently supported languages:
+Driftlock uses a **universal parser** that recognizes structural elements in all major programming and markup languages:
 
-| Language | Extensions | Detected elements |
-|----------|------------|-------------------|
-| Python   | `.py`      | `def` functions, return type annotations |
-| JavaScript / TypeScript | `.js`, `.ts`, `.jsx`, `.tsx` | `function` declarations, arrow functions assigned to `const`/`let` |
-| Go       | `.go`      | `func` declarations, receiver methods, return types |
-| Rust     | `.rs`      | `fn` declarations, parameters, return types |
+- **Functions/methods** in any language (Python, Go, JavaScript, Rust, Java, C, etc.)
+- **Classes/interfaces/structs** definitions
+- **Type declarations** (TypeScript, Go, Rust, etc.)
+- **SQL** table/view/procedure definitions
+- **YAML/JSON** keys at any nesting level
+- **XML/HTML** tags
+- **Markdown** headings
+- **INI/TOML** sections
+- **Shell** function definitions
+
+The parser matches patterns like:
+- `def function_name(params):` (Python)
+- `function name(params) {` (JavaScript)
+- `func name(params) returns` (Go)
+- `fn name(params) -> type {` (Rust) 
+- `public int method(params)` (Java/C#)
+- `CREATE TABLE name` (SQL)
+- `key: value` (YAML)
+- `<tag>` (XML/HTML)
 
 If the **signature** changes (added/removed parameter, different return type,
 renamed function), Driftlock will trigger. Adding a new function triggers it as
@@ -82,7 +94,7 @@ well, even if the docs never mentioned it before – Driftlock will ask the LLM
 to create appropriate documentation.
 
 **Non‑triggers:** modifying a function body, renaming a local variable, adding
-a comment, changing a struct field (for now – struct/trait detection is coming).
+a comment, or changing whitespace/formatting.
 
 If you want Driftlock to see the **full diff** (including bodies and comments)
 when structural changes *are* present, enable `include_full_diff = true` in
@@ -222,7 +234,7 @@ keypair_path = "~/.config/solana/id.json"
 program_id = ""
 ```
 
-When `solana = true`, Driftlock submits each check’s hash to the Solana
+When `solana = true`, Driftlock submits each check's hash to the Solana
 blockchain using the built‑in Memo program (or your custom program). This
 creates an immutable audit trail suitable for compliance.
 
@@ -321,4 +333,3 @@ MIT
 
 *Outdated documentation is technical debt that compiles. Driftlock treats it
 as a build failure.*
----
