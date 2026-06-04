@@ -312,7 +312,7 @@ To use this feature:
 
 ## Development
 
-Requirements: Go 1.22+
+Requirements: Go 1.22+, i think
 
 ```bash
 git clone https://github.com/Ksschkw/driftlock.git
