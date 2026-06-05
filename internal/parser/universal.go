@@ -5,13 +5,20 @@ import (
 	"strings"
 )
 
-// universalPatterns is a list of compiled regexps that match function / method /
-// class / interface / struct / trait / object / macro / etc. declarations.
-// Each pattern captures the name in group 1 and the full matched text in group 0.
-// The patterns are tried in order, and duplicate names are skipped.
+// universalPatterns is an ordered list of regular expressions that capture
+// function, method, class, interface, struct, and other structural
+// declarations from source code in virtually any programming language
+// (and many markup/data formats).
+//
+// The patterns are applied in order. For each match, the "human‑readable
+// name" of the declaration is extracted and a signature string is built.
+// Duplicate names (often caused by overlapping patterns) are ignored so
+// that each structural element appears only once in the final diff.
 var universalPatterns = []*regexp.Regexp{
-	// 1. C‑style functions:   int foo(int a, char b)    -> name "foo"
-	// Also catches constructors/destructors, functions with attributes.
+
+	// ── C‑style functions ──────────────────────────────────────────
+	// int foo(int a, char b)    → name "foo"
+	// Also handles constructors, destructors, and attributes.
 	regexp.MustCompile(
 		`(?m)^[\t ]*(?:(?:static|inline|virtual|explicit|export|constexpr|noexcept|\[\[[^]]+\]\])\s+)*` +
 			`(?:(?:unsigned|signed|short|long|long long|int|char|float|double|void|bool|wchar_t|size_t|ptrdiff_t|int\d+_t|uint\d+_t|auto)\s+)+` +
@@ -19,130 +26,96 @@ var universalPatterns = []*regexp.Regexp{
 			`(\w+)\s*\(([^)]*)\)\s*(?:(?:const|override|final)\s*)*`,
 	),
 
-	// 2. Go style: func Hello(name string) string  AND  func (r *Receiver) Method(...)
+	// ── Go functions and methods ────────────────────────────────────
+	// func Hello(name string) string               → name "Hello"
+	// func (r *Receiver) Method(a int) error       → name "Method"
 	regexp.MustCompile(`(?m)^[\t ]*func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(([^)]*)\)\s*(?:\([^)]*\)|[\w\[\],*&]+)*`),
 
-	// 3. Python / Ruby style: def my_func(param1, param2):
+	// ── Python / Ruby "def" ─────────────────────────────────────────
+	// def my_func(param1, param2):   → name "my_func"
 	regexp.MustCompile(`(?m)^[\t ]*def\s+(\w+)\s*\(([^)]*)\)`),
 
-	// 4. Rust `fn` keyword:   fn process(data: &[u8]) -> Result<(), Error>
+	// ── Rust "fn" ───────────────────────────────────────────────────
+	// fn process(data: &[u8]) -> Result<(), Error>   → name "process"
 	regexp.MustCompile(`(?m)^[\t ]*(?:pub\s+)?fn\s+(\w+)\s*\(([^)]*)\)(?:\s*->\s*[^{]+)?`),
 
-	// 5. JavaScript / TypeScript arrow functions assigned to a variable:
-	//    const add = (a, b) => { ... }
+	// ── JavaScript / TypeScript arrow functions ─────────────────────
+	// const add = (a, b) => { ... }   → name "add"
 	regexp.MustCompile(`(?m)(?:const|let|var)\s+(\w+)\s*=\s*\(?([^)]*)\)?\s*=>`),
 
-	// 6. Classic function keyword: function foo(a,b) { ... }
+	// ── Classic "function" keyword (JS, Lua, PHP, Julia, …) ─────────
 	regexp.MustCompile(`(?m)\bfunction\s+(\w+)\s*\(([^)]*)\)`),
 
-	// 7. Java / C# / Scala / Kotlin method (modifiers + type name):
-	//    public int calculate(int x) { ... }
-	//    public static void main(String[] args) { ... }
+	// ── Java / C# / Scala / Kotlin methods ──────────────────────────
+	// public int calculate(int x) { ... }   → name "calculate"
 	regexp.MustCompile(
 		`(?m)^[\t ]*(?:(?:public|private|protected|internal|static|final|abstract|override|virtual|async)\s+)*` +
 			`(?:\w+(?:<[^>]+>)?\s+)` +
 			`(\w+)\s*\(([^)]*)\)`,
 	),
 
-	// 8. Generic / template function (C++, Rust, Java, C#, etc.):
-	//    template<typename T> void sort(T* a, int n)
+	// ── Template / generic functions (C++, Java, C#, Rust, …) ───────
+	// template<typename T> void sort(T* a, int n)   → name "sort"
 	regexp.MustCompile(`(?m)\btemplate\s*<[^>]+>\s*` +
 		`(?:(?:static|inline|constexpr|virtual|export)\s+)*` +
 		`(?:\w+(?:<[^>]+>)?\s+)+` +
 		`(\w+)\s*\(([^)]*)\)`,
 	),
 
-	// 9. Class / struct / interface / trait / enum / object / record declaration:
-	//    class UserService { ... }
-	//    struct Point { ... }
-	//    public class Calculator { ... }
+	// ── Class / struct / interface / trait / enum / object / record ──
+	// class UserService { … }            → name "UserService"
+	// public class Calculator { … }      → name "Calculator"
 	regexp.MustCompile(
 		`(?m)^[\t ]*(?:(?:public|private|protected|export|abstract|sealed|final|open|data|case)\s+)*` +
 			`\b(class|struct|interface|trait|enum|object|record|module|impl)\s+(\w+)`,
 	),
 
-	// 10. Macro / preprocessor definition (#define) – name is the macro name
+	// ── Preprocessor #define ────────────────────────────────────────
 	regexp.MustCompile(`(?m)^[\t ]*#\s*define\s+(\w+)`),
 
-	// 11. SQL: CREATE TABLE / VIEW / PROCEDURE / FUNCTION
+	// ── SQL DDL ─────────────────────────────────────────────────────
+	// CREATE TABLE users ( … )   → name "users"
 	regexp.MustCompile(`(?i)\bCREATE\s+(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER|INDEX)\s+(\w+)`),
 
-	// 12. Bash / shell function: function_name() { ... }
+	// ── Shell / Bash functions ──────────────────────────────────────
+	// my_func() { … }   → name "my_func"
 	regexp.MustCompile(`(?m)^[\t ]*(\w+)\s*\(\)\s*\{`),
 
-	// 13. YAML / JSON key-value pair (any level): "key": value  or  key: value
+	// ── YAML / JSON keys (any nesting level) ────────────────────────
 	regexp.MustCompile(`(?m)^[\t ]*"?(\w+)"?\s*:`),
 
-	// 14. XML / HTML tags (element name)
+	// ── XML / HTML tags ─────────────────────────────────────────────
 	regexp.MustCompile(`<\s*(\w+)(?:\s[^>]*)?>`),
 
-	// 15. Lua: function foo(params) end
-	regexp.MustCompile(`(?m)\bfunction\s+(\w+)\s*\(([^)]*)\)`),
-
-	// 16. Julia: function foo(x, y) ... end
-	regexp.MustCompile(`(?m)\bfunction\s+(\w+)\s*\(([^)]*)\)`),
-
-	// 17. PHP: function foo($a, $b) { ... }
-	regexp.MustCompile(`(?m)\bfunction\s+(\w+)\s*\(([^)]*)\)`),
-
-	// 18. Swift: func foo(a: Int, b: String) -> Int { ... }
+	// ── Swift "func" ────────────────────────────────────────────────
 	regexp.MustCompile(`(?m)\bfunc\s+(\w+)\s*\(([^)]*)\)(?:\s*->\s*[^{]+)?`),
 
-	// 19. Kotlin: fun foo(a: Int, b: String): Int { ... }
+	// ── Kotlin "fun" ────────────────────────────────────────────────
 	regexp.MustCompile(`(?m)\bfun\s+(\w+)\s*\(([^)]*)\)(?:\s*:\s*[^{]+)?`),
 
-	// 20. Scala: def foo(a: Int): Int = { ... }
+	// ── Scala "def" ─────────────────────────────────────────────────
 	regexp.MustCompile(`(?m)\bdef\s+(\w+)\s*\(([^)]*)\)(?:\s*:\s*[^=]+)?\s*=`),
 
-	// 21. Ruby: def foo(a, b) ... end
-	regexp.MustCompile(`(?m)\bdef\s+(\w+)\s*\(?([^)]*)\)?`),
-
-	// 22. Lisp / Clojure: (defn function-name [args] ...)  -> name "function-name"
+	// ── Lisp / Clojure (defn) ───────────────────────────────────────
 	regexp.MustCompile(`\(\s*defn\s+([\w\-!]+)`),
 
-	// 23. Markdown headings (treated as structural elements)
+	// ── Markdown headings ───────────────────────────────────────────
 	regexp.MustCompile(`(?m)^[\t ]*#{1,6}\s+(.*)`),
 
-	// 24. INI / TOML section headers: [section]  -> name "section"
+	// ── INI / TOML sections ─────────────────────────────────────────
 	regexp.MustCompile(`(?m)^[\t ]*\[\s*(\w+)\s*\]`),
 }
 
-// extractSignaturesUniversal applies all patterns to source and returns a
-// deduplicated list of signatures.
+// extractSignaturesUniversal applies all universal patterns to the source
+// text and returns a deduplicated slice of signatures.
 func extractSignaturesUniversal(source string) []Signature {
 	seen := make(map[string]bool)
 	var sigs []Signature
 
 	for _, re := range universalPatterns {
-		matches := re.FindAllStringSubmatch(source, -1)
-		for _, m := range matches {
-			name := ""
-			var full string
-
-			// Determine capture groups (depends on pattern)
-			if len(m) >= 3 {
-				// Patterns with two explicit groups: (name) and (params) or (keyword, name)
-				// For class/struct/etc pattern, m[1] is the keyword, m[2] is the name.
-				// For others, m[1] is the name, m[2] is the params list.
-				if m[1] != "" && (m[2] == "" || strings.TrimSpace(m[2]) == "") {
-					// likely a pattern like 'class Name' where m[1] is name
-					name = m[1]
-				} else if m[2] != "" && (m[1] == "class" || m[1] == "struct" || m[1] == "interface" ||
-					m[1] == "trait" || m[1] == "enum" || m[1] == "object" ||
-					m[1] == "record" || m[1] == "module" || m[1] == "impl") {
-					name = m[2]
-				} else {
-					name = m[1]
-				}
-				full = m[0]
-			} else if len(m) == 2 {
-				name = m[1]
-				full = m[0]
-			} else {
-				continue
-			}
-
-			if name == "" || name == "if" || name == "for" || name == "while" || name == "switch" {
+		for _, match := range re.FindAllStringSubmatch(source, -1) {
+			name, full := extractNameAndFull(match)
+			if name == "" || isIgnoredKeyword(name) {
 				continue
 			}
 			if seen[name] {
@@ -150,19 +123,65 @@ func extractSignaturesUniversal(source string) []Signature {
 			}
 			seen[name] = true
 
-			sig := full
-			// For very long lines, truncate at first '{' or 'end' to keep signature clean
-			if idx := strings.IndexAny(sig, "{;"); idx != -1 {
-				sig = strings.TrimSpace(sig[:idx])
-			}
-			// Remove trailing colon for Python-like
-			sig = strings.TrimSuffix(sig, ":")
-
-			sigs = append(sigs, Signature{
-				Name:      name,
-				Signature: sig,
-			})
+			sig := cleanSignature(full)
+			sigs = append(sigs, Signature{Name: name, Signature: sig})
 		}
 	}
 	return sigs
+}
+
+// extractNameAndFull deduces the human‑readable name from regex match groups.
+//
+// Many patterns capture two groups: a keyword (like "class" or "struct") and
+// an identifier. This function returns the identifier as the name.
+// For patterns that only capture a name (single group), that group is returned.
+func extractNameAndFull(match []string) (string, string) {
+	if len(match) == 0 {
+		return "", ""
+	}
+	full := match[0]
+
+	// Patterns with two capture groups: m[1] is either a keyword or the name.
+	// If m[1] is a known type keyword and m[2] is non‑empty, use m[2] as the name.
+	if len(match) >= 3 && match[2] != "" && isTypeKeyword(match[1]) {
+		return match[2], full
+	}
+
+	// Otherwise, the first group (m[1]) is the name.
+	if len(match) >= 2 && match[1] != "" {
+		return match[1], full
+	}
+
+	return "", full
+}
+
+// isTypeKeyword returns true if s is a keyword that introduces a type/class
+// definition rather than the name itself.
+func isTypeKeyword(s string) bool {
+	switch s {
+	case "class", "struct", "interface", "trait", "enum",
+		"object", "record", "module", "impl":
+		return true
+	}
+	return false
+}
+
+// isIgnoredKeyword filters out common control‑flow keywords that some
+// patterns may accidentally match (e.g. "if", "for", "switch").
+func isIgnoredKeyword(s string) bool {
+	switch s {
+	case "if", "for", "while", "switch", "return":
+		return true
+	}
+	return false
+}
+
+// cleanSignature trims trailing braces, semicolons, and colons so the
+// signature remains compact.
+func cleanSignature(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if idx := strings.IndexAny(raw, "{;"); idx != -1 {
+		raw = strings.TrimSpace(raw[:idx])
+	}
+	return strings.TrimSuffix(raw, ":")
 }
