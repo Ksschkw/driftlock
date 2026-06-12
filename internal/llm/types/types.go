@@ -17,14 +17,15 @@ type Provider interface {
 // DefaultPrompts returns the built-in check and fix prompts.
 func DefaultPrompts() config.PromptConfig {
 	return config.PromptConfig{
-		Check: `You are a technical documentation verifier. The user has made code changes.
-Here is the structural diff of the code changes (only signatures and types):
+		Check: `You are a precise documentation auditor. Below is a list of structural code changes (function/method signatures that have been added, removed, or modified). Determine whether the provided documentation file explicitly mentions and accurately describes all of these specific changes.
+
+Structural changes:
 {{ .Diff }}
 
-Here is the current documentation file:
+Documentation file:
 {{ .Doc }}
 
-Does the documentation accurately reflect these code changes? Answer exactly 'TRUE' or 'FALSE', followed by a one-sentence explanation.`,
+Answer exactly TRUE if every changed signature is correctly reflected in the documentation, otherwise FALSE. Then provide a one-sentence explanation.`,
 		Fix: `The documentation above is outdated for the code changes below. Rewrite the affected sections so that they correctly reflect the new signatures and types. Keep the rest of the document unchanged, including any unrelated examples or commentary. Output the complete updated markdown file, nothing else.
 
 Code diff:
