@@ -23,7 +23,8 @@ func init() {
 func runCheck(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 	dryRun := true
-	if err := hook.RunWithOptions(ctx, dryRun); err != nil {
+	noFix := true // check never auto‑fixes
+	if err := hook.RunWithOptions(ctx, dryRun, noFix); err != nil {
 		fmt.Fprintf(os.Stderr, "driftlock: %v\n", err)
 		os.Exit(1)
 	}
