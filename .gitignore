@@ -11,3 +11,4 @@ logs/
 *.log
 *.log.*
 *.log-*
+.kosi.toml
