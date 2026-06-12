@@ -327,9 +327,21 @@ Run `driftlock init` inside a test repository to set up the hook.
 
 ## License
 
-MIT
+Driftlock is licensed under the **Business Source License 1.1 (BUSL‑1.1)**.
+You may use, modify, and distribute the software freely for any non‑commercial
+purpose, including personal use and internal use within an organisation.
 
+**Hosting Driftlock as a service (SaaS) or building a directly competing**
+**product requires a separate commercial license.**
+
+The BUSL‑1.1 will automatically become MIT on **2099‑12‑31**.
+
+If you need a commercial license for a prohibited use case, contact
+`kookafor893@gmail.com`.
+
+Full license text: [LICENSE](./LICENSE)
 ---
+
 
 *Outdated documentation is technical debt that compiles. Driftlock treats it
 as a build failure.*

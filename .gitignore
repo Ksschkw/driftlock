@@ -5,3 +5,9 @@ set*.sh
 /driftlock
 driftlock-*
 checksums.txt
+kosi.txt
+kosi-*.txt
+logs/
+*.log
+*.log.*
+*.log-*
