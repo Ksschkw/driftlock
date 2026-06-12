@@ -111,6 +111,10 @@ func (p *openAICompatible) doRequest(ctx context.Context, reqBody map[string]int
 		return "", err
 	}
 
+	if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+		fmt.Fprintf(os.Stderr, "[DEBUG] LLM request body:\n%s\n", string(jsonBody))
+	}
+
 	url := p.cfg.Endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonBody))
 	if err != nil {
