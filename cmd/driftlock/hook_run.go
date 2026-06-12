@@ -9,6 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	noFix bool
+)
+
 var hookRunCmd = &cobra.Command{
 	Use:   "hook-run",
 	Short: "Internal command called by the pre-commit hook",
@@ -17,12 +21,13 @@ var hookRunCmd = &cobra.Command{
 }
 
 func init() {
+	hookRunCmd.Flags().BoolVar(&noFix, "no-fix", false, "Block commit if docs are outdated but do not auto‑fix them")
 	rootCmd.AddCommand(hookRunCmd)
 }
 
 func runHook(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
-	if err := hook.Run(ctx); err != nil {
+	if err := hook.RunWithOptions(ctx, false, noFix); err != nil {
 		fmt.Fprintf(os.Stderr, "driftlock: %v\n", err)
 		os.Exit(1)
 	}
