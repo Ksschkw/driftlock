@@ -44,6 +44,9 @@ type BehaviorConfig struct {
 	BlockOnFalse    bool `toml:"block_on_false"`
 	MaxRetries      int  `toml:"max_retries"`
 	IncludeFullDiff bool `toml:"include_full_diff"`
+	// BlockOnLLMError forces a commit block when the LLM is unreachable,
+	// instead of allowing the commit with a warning.
+	BlockOnLLMError bool `toml:"block_on_llm_error"`
 }
 
 // AuditConfig holds the optional Solana audit settings.
@@ -69,7 +72,7 @@ func DefaultConfig() *Config {
 			Model:    "codestral:22b",
 			Options: map[string]any{
 				"temperature": 0.0,
-				"max_tokens":  4096,
+				"max_tokens":  2048,
 			},
 		},
 		Behavior: BehaviorConfig{
@@ -77,6 +80,7 @@ func DefaultConfig() *Config {
 			BlockOnFalse:    true,
 			MaxRetries:      2,
 			IncludeFullDiff: false,
+			BlockOnLLMError: false, // default: allow commit on LLM error
 		},
 		Audit: AuditConfig{
 			Solana: false,
