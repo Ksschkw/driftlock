@@ -18,21 +18,15 @@ moment of every commit.
 1. [How It Works](#how-it-works)  
 2. [What Counts as a Structural Change](#what-counts-as-a-structural-change)  
 3. [Installation](#installation)  
-    - [Pre‑built binary](#pre-built-binary)  
-    - [Shell installer](#shell-installer)  
-    - [Via Go](#via-go)  
 4. [Quick Start](#quick-start)  
 5. [Configuration](#configuration)  
-    - [`doc_mapping`](#doc_mapping)  
-    - [`llm`](#llm)  
-    - [`behavior`](#behavior)  
-    - [`audit`](#audit)  
 6. [LLM Providers](#llm-providers)  
 7. [Commands](#commands)  
 8. [Behavior & Workflow](#behavior--workflow)  
 9. [Audit Trail (Solana)](#audit-trail-solana)  
-10. [Development](#development)  
-11. [License](#license)
+10. [Escaping the Hook](#escaping-the-hook)  
+11. [Development](#development)  
+12. [License](#license)
 
 ---
 
@@ -49,16 +43,17 @@ git commit
 2. Parse old & new file versions to extract structural signatures
 3. Map changed files → Markdown documents (from .driftlock.toml)
 4. If structural changes exist:
-   a. Send (diff + current doc) to an LLM
-   b. LLM returns TRUE (docs OK) or FALSE (outdated)
-   c. If FALSE → LLM rewrites the affected doc sections
-   d. Print result, optionally block commit (exit 1)
+   a. Extract only the relevant sections of the documentation (smart chunking)
+   b. Send (diff + chunked doc) to an LLM
+   c. LLM returns TRUE (docs OK) or FALSE (outdated)
+   d. If FALSE → LLM rewrites the affected sections, which are then
+      merged back into the full document. Commit is blocked.
 5. If no structural changes: print a green status message, exit 0
 6. (Optional) Log SHA-256 hash to local audit file or Solana
 ```
 
 Driftlock is **not** a simple text‑diff checker. It only triggers when the
-**API‑visible surface** of your code changes. It will stay completely silent
+**API‑visible surface** of your code changes. It stays completely silent
 for cosmetic changes, comment edits, or internal refactors that don't alter
 public signatures.
 
@@ -66,9 +61,11 @@ public signatures.
 
 ## What Counts as a Structural Change
 
-Driftlock uses a **universal parser** that recognizes structural elements in all major programming and markup languages:
+Driftlock uses a **universal parser** that recognizes structural elements
+in all major programming and markup languages:
 
-- **Functions/methods** in any language (Python, Go, JavaScript, Rust, Java, C, etc.)
+- **Functions/methods** in any language (Python, Go, JavaScript, Rust,
+  Java, C, etc.)
 - **Classes/interfaces/structs** definitions
 - **Type declarations** (TypeScript, Go, Rust, etc.)
 - **SQL** table/view/procedure definitions
@@ -110,14 +107,6 @@ your config. This gives the LLM more context to write richer documentation.
 curl -fsSL https://raw.githubusercontent.com/Ksschkw/driftlock/main/install.sh | sh
 ```
 
-This script downloads the latest binary, verifies the SHA‑256 checksum, and
-installs to `/usr/local/bin`. You can override the install directory with the
-`PREFIX` environment variable:
-
-```bash
-PREFIX=$HOME/.local/bin curl -fsSL ... | sh
-```
-
 ### Windows
 
 Open PowerShell and run:
@@ -127,25 +116,16 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 iwr https://raw.githubusercontent.com/Ksschkw/driftlock/main/install.ps1 -UseBasicParsing | iex
 ```
 
-This installs `driftlock.exe` to `%LOCALAPPDATA%\Programs\driftlock` and adds it
-to your user `PATH`.
-
 ### Via Go
 
 ```bash
 go install github.com/Ksschkw/driftlock/cmd/driftlock@latest
 ```
 
-Requires Go 1.22 or later.
-
 ### Manual download
 
 Grab the correct binary for your platform from the
-[Releases page](https://github.com/Ksschkw/driftlock/releases). Place it
-somewhere in your `PATH`.
-
----
-
+[Releases page](https://github.com/Ksschkw/driftlock/releases).
 
 ---
 
@@ -153,14 +133,11 @@ somewhere in your `PATH`.
 
 ```bash
 cd your-project
-driftlock init                # creates .driftlock.toml, pre-commit hook, updates .gitignore
+driftlock init                # interactive guided setup
 # edit .driftlock.toml to set your LLM provider and API key
 git add . && git commit -m "your message"
 # If your docs are out of sync, the commit is blocked and the docs are updated.
 ```
-
-The `driftlock init` command also adds `.driftlock.toml` and `.driftlock/` to
-`.gitignore` so secrets never leak.
 
 ---
 
@@ -177,12 +154,8 @@ sources = ["cmd/**", "internal/**"]
 docs = ["README.md"]
 ```
 
-- `sources` – a list of glob patterns matching source files. `**` matches all
-  subdirectories.
-- `docs` – a list of Markdown files or directories. If a directory (like
-  `docs/`) is given, all `*.md` files inside are included.
-
-You can have multiple `[[doc_mapping]]` sections.
+- `sources` – glob patterns matching source files. `**` matches all subdirectories.
+- `docs` – Markdown files or directories. Directories are expanded to `*.md` files inside.
 
 ### `llm`
 
@@ -194,16 +167,12 @@ model = "deepseek/deepseek-chat"
 api_key = "${DRIFTLOCK_API_KEY}"   # env var expansion
 ```
 
-- `driver` – adapter to use: `openai-compatible` (OpenRouter, Groq, DeepSeek,
-  Together, vLLM, etc.) or `ollama` (local Ollama).
-- `endpoint` – the **full URL** of the chat completion endpoint, including
-  `/v1/chat/completions` or `/api/generate`. Nothing is appended.
-- `model` – the model name as the provider expects it.
+- `driver` – adapter: `openai-compatible` (OpenRouter, Groq, DeepSeek, Together, vLLM) or `ollama`.
+- `endpoint` – **full URL** of the chat completions endpoint. Nothing is appended.
+- `model` – model name as the provider expects it.
 - `api_key` – use `${ENV_VAR}` to reference an environment variable.
-- `options` – a table of extra parameters passed directly to the API (e.g.,
-  `temperature = 0.0`, `max_tokens = 4096`).
-- `[llm.prompts]` – optional override of the built‑in check and fix prompts,
-  with `{{ .Diff }}` and `{{ .Doc }}` placeholders.
+- `options` – extra parameters passed directly to the API (`temperature`, `max_tokens`, etc.).
+- `[llm.prompts]` – optional override of the built‑in check and fix prompts.
 
 ### `behavior`
 
@@ -211,18 +180,16 @@ api_key = "${DRIFTLOCK_API_KEY}"   # env var expansion
 [behavior]
 auto_fix = true
 block_on_false = true
+block_on_llm_error = false
 max_retries = 2
 include_full_diff = false
 ```
 
-- `auto_fix` – if `true`, Driftlock will rewrite the documentation when it
-  detects drift.
-- `block_on_false` – if `true`, the commit is aborted when drift is found.
-- `max_retries` – number of retries with exponential backoff if the LLM request
-  fails.
-- `include_full_diff` – if `true`, the LLM receives the complete `git diff`
-  (not just signature changes) when structural changes are present. This gives
-  the model richer context for writing documentation, but uses more tokens.
+- `auto_fix` – if `true`, rewrites documentation when drift is detected.
+- `block_on_false` – if `true`, aborts the commit when docs are outdated.
+- `block_on_llm_error` – if `true`, aborts the commit when the LLM is unreachable.
+- `max_retries` – number of retries with exponential backoff.
+- `include_full_diff` – if `true`, sends the complete `git diff` to the LLM (uses more tokens).
 
 ### `audit`
 
@@ -234,9 +201,8 @@ keypair_path = "~/.config/solana/id.json"
 program_id = ""
 ```
 
-When `solana = true`, Driftlock submits each check's hash to the Solana
-blockchain using the built‑in Memo program (or your custom program). This
-creates an immutable audit trail suitable for compliance.
+When `solana = true`, Driftlock submits each check’s hash to the Solana
+blockchain using the built‑in Memo program.
 
 ---
 
@@ -254,18 +220,15 @@ any service that exposes an OpenAI‑style chat completions endpoint, including:
 The `ollama` driver speaks the native Ollama API (default
 `http://localhost:11434/api/generate`).
 
-To add a provider, just change the `endpoint` and `model` – no code changes
-needed.
-
 ---
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `driftlock init` | Initialize the project (config, hook, .gitignore) |
-| `driftlock hook-run` | Internal – called by the pre‑commit hook |
-| `driftlock check` | Check for drift without modifying files; exit non‑zero if drift found |
+| `driftlock init` | Interactive guided setup (config, hook, .gitignore) |
+| `driftlock hook-run [--no-fix]` | Called by the pre‑commit hook |
+| `driftlock check` | Check for drift; never modifies files |
 | `driftlock fix` | Force regeneration of all mapped documentation |
 | `driftlock log` | Show the last 20 audit log entries |
 
@@ -276,21 +239,33 @@ needed.
 When you run `git commit`:
 
 1. If no mapped source files are staged, Driftlock exits silently.
-2. If mapped sources have **no structural changes**, a green message is printed:
-   `driftlock: No structural changes in mapped sources; documentation check skipped.`
+2. If mapped sources have **no structural changes**, a green message is printed.
 3. If structural changes are found:
-   - The LLM is called to check whether the current docs match the new code.
+   - Only the relevant sections of the documentation are sent to the LLM
+     (smart chunking).
    - If the docs are **up‑to‑date** (LLM returns TRUE), a green message is
      printed and the commit proceeds.
    - If the docs are **outdated** (FALSE), a red message is printed. If
-     `auto_fix = true`, the documentation is rewritten in place. The commit is
-     blocked (exit code 1) so you can review and stage the updated doc.
-   - If the LLM is unreachable after all retries, a yellow warning is shown
-     and the commit proceeds – Driftlock never blocks a commit because of a
-     network error.
+     `auto_fix = true`, the LLM rewrites the affected sections, they are
+     merged back into the full document, and the commit is blocked so you
+     can review and stage the updated doc.
+   - If the LLM is unreachable, a yellow warning is shown. By default the
+     commit proceeds; set `block_on_llm_error = true` to change that.
 
-Driftlock also supports a `DRIFTLOCK_DEBUG=1` environment variable that prints
-the raw LLM response to stderr, useful for troubleshooting prompt issues.
+Use `DRIFTLOCK_DEBUG=1` to see the raw LLM payloads and responses.
+
+---
+
+## Escaping the Hook
+
+If you need to commit without triggering Driftlock (e.g., for bulk
+infrastructure changes), set the environment variable:
+
+```bash
+DRIFTLOCK_SKIP=true git commit -m "your message"
+```
+
+This bypasses all checks and allows the commit to proceed immediately.
 
 ---
 
@@ -299,29 +274,21 @@ the raw LLM response to stderr, useful for troubleshooting prompt issues.
 When enabled, Driftlock generates a SHA‑256 hash of the code diff and
 documentation content, then submits it to the Solana blockchain using the
 standard [Memo Program](https://spl.solana.com/memo). This hash is permanently
-recorded and publicly verifiable. A local audit log is also kept in
-`.driftlock/audit.jsonl`.
-
-To use this feature:
-
-1. Set `solana = true` and provide an RPC endpoint and funded keypair.
-2. Ensure the account has enough SOL for transaction fees (devnet SOL is free
-   via airdrops).
+recorded and publicly verifiable.
 
 ---
 
 ## Development
 
-Requirements: Go 1.22+, i think
+Requirements: Go 1.22+
 
 ```bash
 git clone https://github.com/Ksschkw/driftlock.git
 cd driftlock
 go build -o driftlock ./cmd/driftlock
-# To test locally, add the build directory to your PATH or run sudo cp driftlock /usr/local/bin/
+# To test locally, add the build directory to your PATH or run
+# sudo cp driftlock /usr/local/bin/
 ```
-
-Run `driftlock init` inside a test repository to set up the hook.
 
 ---
 
@@ -340,8 +307,5 @@ If you need a commercial license for a prohibited use case, contact
 `kookafor893@gmail.com`.
 
 Full license text: [LICENSE](./LICENSE)
+
 ---
-
-
-*Outdated documentation is technical debt that compiles. Driftlock treats it
-as a build failure.*
