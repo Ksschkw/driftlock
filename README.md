@@ -11,7 +11,7 @@ Optionally, Driftlock can log an immutable audit trail to a Solana devnet
 contract, giving you cryptographic proof that documentation matched code at the
 moment of every commit.
 
-> Example: https://youtu.be/o-Ox7lnqHxs
+> Example usage on youtube: https://youtu.be/o-Ox7lnqHxs
 
 ---
 
