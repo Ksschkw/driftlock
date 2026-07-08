@@ -78,6 +78,63 @@ func ListStagedFiles() ([]string, error) {
 	return files, nil
 }
 
+// ListChangedFilesInRange returns files that changed between two refs (e.g. a
+// PR base and head). Used by CI mode, where nothing is staged. If head is
+// empty it defaults to HEAD.
+func ListChangedFilesInRange(base, head string) ([]string, error) {
+	if head == "" {
+		head = "HEAD"
+	}
+	cmd := exec.Command("git", "diff", "--name-only", base, head)
+	var out, errBuf bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git diff %s..%s failed: %v\noutput: %s", base, head, err, errBuf.String())
+	}
+	files := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(files) == 1 && files[0] == "" {
+		return nil, nil
+	}
+	return files, nil
+}
+
+// GetFileContentAtRef returns the content of a file at an arbitrary ref. If the
+// file does not exist at that ref (e.g. it was added), it returns "" and no
+// error.
+func GetFileContentAtRef(ref, filePath string) (string, error) {
+	cmd := exec.Command("git", "show", ref+":"+filePath)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		errStr := out.String()
+		if strings.Contains(errStr, "does not exist") ||
+			strings.Contains(errStr, "exists on disk, but not in") ||
+			strings.Contains(errStr, "bad revision") ||
+			strings.Contains(errStr, "path") && strings.Contains(errStr, "not in") {
+			return "", nil
+		}
+		return "", fmt.Errorf("git show %s:%s failed: %v\noutput: %s", ref, filePath, err, errStr)
+	}
+	return out.String(), nil
+}
+
+// RangeDiff returns the unified diff between two refs.
+func RangeDiff(base, head string) (string, error) {
+	if head == "" {
+		head = "HEAD"
+	}
+	cmd := exec.Command("git", "diff", "-U5", base, head)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git range diff failed: %v\noutput: %s", err, out.String())
+	}
+	return out.String(), nil
+}
+
 // ListTrackedFiles returns all files tracked by Git in the current working directory.
 func ListTrackedFiles() ([]string, error) {
 	cmd := exec.Command("git", "ls-files")
