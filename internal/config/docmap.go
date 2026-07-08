@@ -13,16 +13,7 @@ func ResolveDocMapping(entries []DocMapEntry, stagedFiles []string, root string)
 	for _, entry := range entries {
 		for _, srcGlob := range entry.Sources {
 			for _, staged := range stagedFiles {
-				match, err := filepath.Match(srcGlob, staged)
-				if err != nil {
-					return nil, err
-				}
-				if !match {
-					if strings.HasPrefix(staged, strings.TrimSuffix(srcGlob, "**")) {
-						match = true
-					}
-				}
-				if match {
+				if MatchGlob(srcGlob, staged) {
 					for _, doc := range entry.Docs {
 						resolvedDocs, err := ResolveDocPath(doc, root)
 						if err != nil {
