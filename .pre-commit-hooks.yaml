@@ -1,0 +1,8 @@
+- id: driftlock
+  name: driftlock
+  description: Block commits whose documentation drifts from structural code changes.
+  entry: driftlock hook-run
+  language: system
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
