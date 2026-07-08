@@ -2,6 +2,7 @@ package hook
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Ksschkw/driftlock/internal/audit"
+	"github.com/Ksschkw/driftlock/internal/cache"
 	"github.com/Ksschkw/driftlock/internal/config"
 	"github.com/Ksschkw/driftlock/internal/diff"
 	"github.com/Ksschkw/driftlock/internal/docman"
@@ -20,44 +22,105 @@ import (
 	"github.com/Ksschkw/driftlock/internal/updater"
 )
 
+// Options controls a Driftlock run.
+type Options struct {
+	// DryRun performs the check without writing any files.
+	DryRun bool
+	// NoFix blocks on drift without auto-fixing, even when auto_fix is enabled.
+	NoFix bool
+	// BaseRef, when set, switches to range mode: instead of the staged index,
+	// Driftlock compares BaseRef..HeadRef. This is how CI runs against a pull
+	// request (base = target branch, head = PR tip).
+	BaseRef string
+	// HeadRef is the newer ref in range mode; defaults to HEAD.
+	HeadRef string
+	// Report makes the run informational only: drift is reported but the run
+	// never exits non-zero. Ideal for gradual adoption.
+	Report bool
+	// JSON emits a machine-readable report to stdout instead of colored text.
+	JSON bool
+}
+
 type checkResult struct {
 	ok          bool
 	explanation string
 	err         error
 }
 
-func Run(ctx context.Context) error {
-	return RunWithOptions(ctx, false, false)
+// DocResult is the per-document outcome, used for JSON output.
+type DocResult struct {
+	Doc         string   `json:"doc"`
+	Status      string   `json:"status"` // up_to_date | outdated | llm_error | skipped
+	Explanation string   `json:"explanation,omitempty"`
+	Changes     []string `json:"changes,omitempty"`
+	Fixed       bool     `json:"fixed,omitempty"`
 }
 
-func RunWithOptions(ctx context.Context, dryRun bool, noFix bool) error {
+// Report is the aggregate machine-readable result.
+type Report struct {
+	Mode    string      `json:"mode"` // staged | range
+	Drift   bool        `json:"drift"`
+	Results []DocResult `json:"results"`
+}
+
+// Run executes with default (staged, auto-fixing) options.
+func Run(ctx context.Context) error {
+	return RunWith(ctx, Options{})
+}
+
+// RunWithOptions preserves the original three-argument entry point.
+func RunWithOptions(ctx context.Context, dryRun, noFix bool) error {
+	return RunWith(ctx, Options{DryRun: dryRun, NoFix: noFix})
+}
+
+// RunWith is the main pipeline. It resolves changed source files (from the
+// staging index or a ref range), maps them to docs, checks each doc against its
+// structural changes via the LLM (consulting the verdict cache first), and
+// optionally auto-fixes and blocks.
+func RunWith(ctx context.Context, opts Options) error {
 	if os.Getenv("DRIFTLOCK_SKIP") == "true" {
 		return nil
 	}
+
 	cfg, err := config.LoadProjectConfig()
 	if err != nil {
 		return err
 	}
-
-	files, err := git.ListStagedFiles()
-	if err != nil {
-		return fmt.Errorf("failed to list staged files: %w", err)
-	}
-	if len(files) == 0 {
-		fmt.Fprint(os.Stderr, output.GreenStr("driftlock: No files staged for commit. Nothing to check.\n"))
-		return nil
-	}
-
 	root, err := config.FindProjectRoot()
 	if err != nil {
 		return err
 	}
+
+	rangeMode := opts.BaseRef != ""
+	mode := "staged"
+	if rangeMode {
+		mode = "range"
+	}
+
+	// Resolve the changed files and content accessors for the active mode.
+	files, oldContentOf, newContentOf, err := resolveSources(opts, rangeMode)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		if !opts.JSON {
+			fmt.Fprint(os.Stderr, output.GreenStr("driftlock: No changed files to check.\n"))
+		} else {
+			printJSON(Report{Mode: mode})
+		}
+		return nil
+	}
+
 	docMap, err := config.ResolveDocMapping(cfg.DocMapping, files, root)
 	if err != nil {
 		return fmt.Errorf("failed to resolve doc mapping: %w", err)
 	}
 	if len(docMap) == 0 {
-		fmt.Fprint(os.Stderr, output.GreenStr("driftlock: Staged files do not match any doc_mapping sources. Nothing to check.\n"))
+		if !opts.JSON {
+			fmt.Fprint(os.Stderr, output.GreenStr("driftlock: Changed files do not match any doc_mapping sources. Nothing to check.\n"))
+		} else {
+			printJSON(Report{Mode: mode})
+		}
 		return nil
 	}
 
@@ -66,11 +129,24 @@ func RunWithOptions(ctx context.Context, dryRun bool, noFix bool) error {
 		return fmt.Errorf("failed to create LLM provider: %w", err)
 	}
 
+	verdictCache := cache.Load(root, cfg.Behavior.CacheEnabled())
+	defer func() { _ = verdictCache.Save() }()
+
 	var fullDiff string
 	if cfg.Behavior.IncludeFullDiff {
-		fullDiff, _ = git.GetStagedDiff()
+		if rangeMode {
+			fullDiff, _ = git.RangeDiff(opts.BaseRef, opts.HeadRef)
+		} else {
+			fullDiff, _ = git.GetStagedDiff()
+		}
 	}
 
+	// In range mode we can never write fixes back into a commit, so force
+	// check-only semantics.
+	noFix := opts.NoFix || rangeMode
+	dryRun := opts.DryRun || rangeMode
+
+	report := Report{Mode: mode}
 	anyStructuralChanges := false
 	anyOutOfSync := false
 	anyLLMError := false
@@ -81,36 +157,26 @@ func RunWithOptions(ctx context.Context, dryRun bool, noFix bool) error {
 			if !contains(files, src) {
 				continue
 			}
-			oldContent, _ := git.GetFileContentAtHEAD(src)
-			newContent, _ := git.GetStagedFileContent(src)
+			oldContent := oldContentOf(src)
+			newContent := newContentOf(src)
 			if newContent == "" && oldContent != "" {
-				continue
+				continue // deletion: nothing structural to document
 			}
-			changes := diff.ExtractStructuralChanges(src, oldContent, newContent)
-			allChanges = append(allChanges, changes...)
+			allChanges = append(allChanges, diff.ExtractStructuralChanges(src, oldContent, newContent)...)
 		}
 		if len(allChanges) == 0 {
 			continue
 		}
 		anyStructuralChanges = true
 
-		// Extract only public‑API names for doc chunking.
-		changedNames := []string{}
-		for _, ch := range allChanges {
-			sig := ch.NewSig
-			if sig == "" {
-				sig = ch.OldSig
-			}
-			name := extractNameFromSignature(sig)
-			if name != "" {
-				changedNames = append(changedNames, name)
-			}
-		}
+		changedNames := publicNames(allChanges)
 
 		docFullPath := filepath.Join(root, docPath)
 		fullDocBytes, err := os.ReadFile(docFullPath)
 		if err != nil {
-			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not read doc %s: %v\n", docPath, err)))
+			if !opts.JSON {
+				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not read doc %s: %v\n", docPath, err)))
+			}
 			continue
 		}
 		fullDoc := string(fullDocBytes)
@@ -121,17 +187,36 @@ func RunWithOptions(ctx context.Context, dryRun bool, noFix bool) error {
 			diffForLLM = fullDiff
 		}
 
-		// Chunk the documentation using only the public‑API names.
 		chunkedDoc := docman.ExtractRelevantSections(fullDoc, changedNames)
 		if os.Getenv("DRIFTLOCK_DEBUG") != "" {
-			fmt.Fprintf(os.Stderr, "[DEBUG] chunked doc length: %d bytes (full doc: %d)\n", len(chunkedDoc), len(fullDoc))
+			fmt.Fprintf(os.Stderr, "[DEBUG] %s chunked doc: %d bytes (full: %d)\n", docPath, len(chunkedDoc), len(fullDoc))
 		}
 
-		// Use the chunked doc for the check.
-		result := checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffForLLM, chunkedDoc)
+		dr := DocResult{Doc: docPath, Changes: summarizeChanges(allChanges)}
+
+		// Consult the cache before spending tokens.
+		cacheKey := cache.Key(cfg.LLM.Model, diffForLLM, chunkedDoc)
+		var result checkResult
+		if cached, ok := verdictCache.Get(cacheKey); ok {
+			result = checkResult{ok: cached.OK, explanation: cached.Explanation}
+			if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+				fmt.Fprintf(os.Stderr, "[DEBUG] %s: cache hit\n", docPath)
+			}
+		} else {
+			result = checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffForLLM, chunkedDoc)
+			if result.err == nil {
+				verdictCache.Set(cacheKey, cache.Entry{OK: result.ok, Explanation: result.explanation})
+			}
+		}
+
 		if result.err != nil {
 			anyLLMError = true
-			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("driftlock: %s → LLM error: %v\n", docPath, result.err)))
+			dr.Status = "llm_error"
+			dr.Explanation = result.err.Error()
+			report.Results = append(report.Results, dr)
+			if !opts.JSON {
+				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("driftlock: %s → LLM error: %v\n", docPath, result.err)))
+			}
 			continue
 		}
 
@@ -139,61 +224,76 @@ func RunWithOptions(ctx context.Context, dryRun bool, noFix bool) error {
 			strings.TrimPrefix(strings.TrimSpace(result.explanation), "TRUE. "),
 			"FALSE. ",
 		)
+		dr.Explanation = cleanExplanation
 
 		if result.ok {
-			fmt.Fprint(os.Stderr, output.GreenStr(fmt.Sprintf("driftlock: %s → up to date (%s)\n", docPath, cleanExplanation)))
+			dr.Status = "up_to_date"
+			if !opts.JSON {
+				fmt.Fprint(os.Stderr, output.GreenStr(fmt.Sprintf("driftlock: %s → up to date (%s)\n", docPath, cleanExplanation)))
+			}
 		} else {
-			fmt.Fprint(os.Stderr, output.RedStr(fmt.Sprintf("driftlock: %s → outdated (%s)\n", docPath, cleanExplanation)))
+			dr.Status = "outdated"
 			anyOutOfSync = true
+			if !opts.JSON {
+				fmt.Fprint(os.Stderr, output.RedStr(fmt.Sprintf("driftlock: %s → outdated (%s)\n", docPath, cleanExplanation)))
+			}
 		}
 
-		// Auto‑fix uses the CHUNKED doc, then stitches the result back
-		// into the full document. This keeps token usage minimal.
-		if !result.ok && cfg.Behavior.AutoFix && !dryRun && !noFix {
-			updatedSections, err := provider.Fix(ctx, diffForLLM, chunkedDoc)
-			if err != nil {
-				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("auto-fix failed for %s: %v\n", docPath, err)))
-				continue
+		if !result.ok && cfg.Behavior.AutoFix && !dryRun && !noFix && !opts.Report {
+			updatedSections, ferr := provider.Fix(ctx, diffForLLM, chunkedDoc)
+			if ferr != nil {
+				if !opts.JSON {
+					fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("auto-fix failed for %s: %v\n", docPath, ferr)))
+				}
+			} else {
+				newFullDoc := docman.MergeSectionUpdates(fullDoc, updatedSections)
+				if werr := updater.WriteDoc(docFullPath, newFullDoc); werr != nil {
+					if !opts.JSON {
+						fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("failed to write updated doc %s: %v\n", docPath, werr)))
+					}
+				} else {
+					dr.Fixed = true
+					if !opts.JSON {
+						fmt.Fprint(os.Stderr, output.BoldStr(fmt.Sprintf("driftlock: %s has been updated to reflect your changes.\n", docPath)))
+					}
+				}
 			}
-			newFullDoc := docman.MergeSectionUpdates(fullDoc, updatedSections)
-			if err := updater.WriteDoc(docFullPath, newFullDoc); err != nil {
-				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("failed to write updated doc %s: %v\n", docPath, err)))
-				continue
-			}
-			fmt.Fprint(os.Stderr, output.BoldStr(fmt.Sprintf("driftlock: %s has been updated to reflect your changes.\n", docPath)))
 		}
+
+		report.Results = append(report.Results, dr)
 
 		hash := audit.ComputeHash(diffText, fullDoc)
-		if err := audit.LogHash(root, hash, sourceFiles); err != nil {
+		if err := audit.LogHash(root, hash, sourceFiles); err != nil && !opts.JSON {
 			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: audit logging failed: %v\n", err)))
 		}
 		if cfg.Audit.Solana {
-			if err := audit.SendSolanaAudit(ctx, cfg.Audit, hash); err != nil {
+			if err := audit.SendSolanaAudit(ctx, cfg.Audit, hash); err != nil && !opts.JSON {
 				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: Solana audit logging failed: %v\n", err)))
 			}
 		}
 	}
 
-	// ---- final summary ----
+	report.Drift = anyOutOfSync
+
+	if opts.JSON {
+		printJSON(report)
+	} else {
+		printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError, cfg, dryRun)
+	}
+
+	// Report mode is purely informational.
+	if opts.Report {
+		return nil
+	}
+
+	// Blocking decisions.
 	if anyLLMError && cfg.Behavior.BlockOnLLMError && !dryRun {
-		fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: LLM check failed and block_on_llm_error is enabled.\n"))
 		os.Exit(1)
 	}
-	if anyLLMError && !cfg.Behavior.BlockOnLLMError {
-		fmt.Fprint(os.Stderr, output.YellowStr("\ndriftlock: Some documentation checks could not be completed due to LLM errors. Review manually.\n"))
-	}
-
-	if !anyLLMError || !cfg.Behavior.BlockOnLLMError {
-		if anyOutOfSync {
-			// per‑doc already printed
-		} else if anyStructuralChanges {
-			fmt.Fprint(os.Stderr, output.GreenStr("\ndriftlock: All documentation matches the latest structural changes.\n"))
-		} else {
-			fmt.Fprint(os.Stderr, output.GreenStr("\ndriftlock: No structural changes in mapped sources; documentation check skipped.\n"))
+	if anyOutOfSync && cfg.Behavior.BlockOnFalse {
+		if dryRun {
+			return fmt.Errorf("documentation drift detected")
 		}
-	}
-
-	if anyOutOfSync && cfg.Behavior.BlockOnFalse && !dryRun {
 		if noFix {
 			fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: documentation out of sync. Review the flagged issues and update docs manually.\n"))
 		} else {
@@ -201,10 +301,84 @@ func RunWithOptions(ctx context.Context, dryRun bool, noFix bool) error {
 		}
 		os.Exit(1)
 	}
-	if anyOutOfSync && dryRun {
-		return fmt.Errorf("documentation drift detected")
-	}
 	return nil
+}
+
+// resolveSources returns the changed files and closures to read their old/new
+// content, for either staged or range mode.
+func resolveSources(opts Options, rangeMode bool) ([]string, func(string) string, func(string) string, error) {
+	if rangeMode {
+		files, err := git.ListChangedFilesInRange(opts.BaseRef, opts.HeadRef)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to list changed files in range: %w", err)
+		}
+		head := opts.HeadRef
+		if head == "" {
+			head = "HEAD"
+		}
+		oldOf := func(src string) string { c, _ := git.GetFileContentAtRef(opts.BaseRef, src); return c }
+		newOf := func(src string) string { c, _ := git.GetFileContentAtRef(head, src); return c }
+		return files, oldOf, newOf, nil
+	}
+
+	files, err := git.ListStagedFiles()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to list staged files: %w", err)
+	}
+	oldOf := func(src string) string { c, _ := git.GetFileContentAtHEAD(src); return c }
+	newOf := func(src string) string { c, _ := git.GetStagedFileContent(src); return c }
+	return files, oldOf, newOf, nil
+}
+
+func printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError bool, cfg *config.Config, dryRun bool) {
+	if anyLLMError && !cfg.Behavior.BlockOnLLMError {
+		fmt.Fprint(os.Stderr, output.YellowStr("\ndriftlock: Some documentation checks could not be completed due to LLM errors. Review manually.\n"))
+	}
+	if anyLLMError && cfg.Behavior.BlockOnLLMError && !dryRun {
+		fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: LLM check failed and block_on_llm_error is enabled.\n"))
+		return
+	}
+	if anyOutOfSync {
+		return // per-doc lines already printed
+	}
+	if anyStructuralChanges {
+		fmt.Fprint(os.Stderr, output.GreenStr("\ndriftlock: All documentation matches the latest structural changes.\n"))
+	} else {
+		fmt.Fprint(os.Stderr, output.GreenStr("\ndriftlock: No structural changes in mapped sources; documentation check skipped.\n"))
+	}
+}
+
+func printJSON(r Report) {
+	b, _ := json.MarshalIndent(r, "", "  ")
+	fmt.Fprintln(os.Stdout, string(b))
+}
+
+// publicNames extracts public-API symbol names from a set of changes for use in
+// documentation chunking.
+func publicNames(changes []diff.StructuralChange) []string {
+	var names []string
+	for _, ch := range changes {
+		sig := ch.NewSig
+		if sig == "" {
+			sig = ch.OldSig
+		}
+		if name := extractNameFromSignature(sig); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func summarizeChanges(changes []diff.StructuralChange) []string {
+	var out []string
+	for _, c := range changes {
+		sig := c.NewSig
+		if sig == "" {
+			sig = c.OldSig
+		}
+		out = append(out, c.Change+": "+sig)
+	}
+	return out
 }
 
 // FixAll forces regeneration of all mapped documentation for staged files.
@@ -240,8 +414,7 @@ func FixAll(ctx context.Context) error {
 			if newContent == "" && oldContent != "" {
 				continue
 			}
-			changes := diff.ExtractStructuralChanges(src, oldContent, newContent)
-			allChanges = append(allChanges, changes...)
+			allChanges = append(allChanges, diff.ExtractStructuralChanges(src, oldContent, newContent)...)
 		}
 		if len(allChanges) == 0 {
 			continue
@@ -289,11 +462,19 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-// extractNameFromSignature extracts the function/method name from a
-// signature string.  It only returns names that look like public API
-// (exported) to avoid polluting the doc chunking with local variables.
+// extractNameFromSignature extracts the function/method name from a signature
+// string, keeping only names that look like public API to avoid polluting doc
+// chunking with local symbols.
 func extractNameFromSignature(sig string) string {
 	if !strings.Contains(sig, "(") {
+		// Type/class declarations have no parens; take the last token.
+		fields := strings.Fields(sig)
+		if len(fields) >= 2 {
+			name := fields[len(fields)-1]
+			if isExportedName(name) {
+				return name
+			}
+		}
 		return ""
 	}
 	parts := strings.Fields(sig)
@@ -309,8 +490,6 @@ func extractNameFromSignature(sig string) string {
 			if idx := strings.IndexByte(name, '('); idx != -1 {
 				name = name[:idx]
 			}
-			// Only keep if it looks exported (uppercase) or is from a
-			// language that doesn't use case to denote public (Python/Ruby).
 			if isExportedName(name) || isLowercasePublic(sig) {
 				return name
 			}
@@ -325,8 +504,6 @@ func isExportedName(name string) bool {
 }
 
 func isLowercasePublic(sig string) bool {
-	// Heuristic: if the signature contains 'def ' or 'fn ' (Rust),
-	// the name is public unless it starts with '_'.
 	if strings.Contains(sig, "def ") || strings.Contains(sig, "fn ") {
 		parts := strings.Fields(sig)
 		if len(parts) >= 2 {
