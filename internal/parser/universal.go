@@ -5,183 +5,109 @@ import (
 	"strings"
 )
 
-// universalPatterns is an ordered list of regular expressions that capture
-// function, method, class, interface, struct, and other structural
-// declarations from source code in virtually any programming language
-// (and many markup/data formats).
+// extractSignatures is the core extraction routine. It selects a language spec
+// from the file path, sanitizes comments/strings, honors driftlock:ignore
+// annotations, and applies only that language's structural patterns. Unknown
+// extensions fall back to a conservative universal code spec.
 //
-// The patterns are applied in order. For each match, the "human‑readable
-// name" of the declaration is extracted and a signature string is built.
-// Duplicate names (often caused by overlapping patterns) are ignored so
-// that each structural element appears only once in the final diff.
-var universalPatterns = []*regexp.Regexp{
+// Names are deduplicated within a file so each structural element appears once,
+// regardless of how many patterns happen to match it.
+func extractSignatures(filePath, source string) []Signature {
+	spec := specForFile(filePath)
+	sanitized := sanitize(source, spec)
+	ignored := ignoredLines(source, spec)
 
-	// ── C‑style functions ──────────────────────────────────────────
-	// int foo(int a, char b)    → name "foo"
-	// Also handles constructors, destructors, and attributes.
-	regexp.MustCompile(
-		`(?m)^[\t ]*(?:(?:static|inline|virtual|explicit|export|constexpr|noexcept|\[\[[^]]+\]\])\s+)*` +
-			`(?:(?:unsigned|signed|short|long|long long|int|char|float|double|void|bool|wchar_t|size_t|ptrdiff_t|int\d+_t|uint\d+_t|auto)\s+)+` +
-			`(?:\*\s*|&\s*)*` +
-			`(\w+)\s*\(([^)]*)\)\s*(?:(?:const|override|final)\s*)*`,
-	),
-
-	// ── Go functions and methods ────────────────────────────────────
-	// func Hello(name string) string               → name "Hello"
-	// func (r *Receiver) Method(a int) error       → name "Method"
-	regexp.MustCompile(`(?m)^[\t ]*func\s+(?:\(\s*\w+\s+\*?\w+\s*\)\s+)?(\w+)\s*\(([^)]*)\)\s*(?:\([^)]*\)|[\w\[\],*&]+)*`),
-
-	// ── Python / Ruby "def" ─────────────────────────────────────────
-	// def my_func(param1, param2):   → name "my_func"
-	regexp.MustCompile(`(?m)^[\t ]*def\s+(\w+)\s*\(([^)]*)\)`),
-
-	// ── Rust "fn" ───────────────────────────────────────────────────
-	// fn process(data: &[u8]) -> Result<(), Error>   → name "process"
-	regexp.MustCompile(`(?m)^[\t ]*(?:pub\s+)?fn\s+(\w+)\s*\(([^)]*)\)(?:\s*->\s*[^{]+)?`),
-
-	// ── JavaScript / TypeScript arrow functions ─────────────────────
-	// const add = (a, b) => { ... }   → name "add"
-	regexp.MustCompile(`(?m)(?:const|let|var)\s+(\w+)\s*=\s*\(?([^)]*)\)?\s*=>`),
-
-	// ── Classic "function" keyword (JS, Lua, PHP, Julia, …) ─────────
-	regexp.MustCompile(`(?m)\bfunction\s+(\w+)\s*\(([^)]*)\)`),
-
-	// ── Java / C# / Scala / Kotlin methods ──────────────────────────
-	// public int calculate(int x) { ... }   → name "calculate"
-	regexp.MustCompile(
-		`(?m)^[\t ]*(?:(?:public|private|protected|internal|static|final|abstract|override|virtual|async)\s+)*` +
-			`(?:\w+(?:<[^>]+>)?\s+)` +
-			`(\w+)\s*\(([^)]*)\)`,
-	),
-
-	// ── Template / generic functions (C++, Java, C#, Rust, …) ───────
-	// template<typename T> void sort(T* a, int n)   → name "sort"
-	regexp.MustCompile(`(?m)\btemplate\s*<[^>]+>\s*` +
-		`(?:(?:static|inline|constexpr|virtual|export)\s+)*` +
-		`(?:\w+(?:<[^>]+>)?\s+)+` +
-		`(\w+)\s*\(([^)]*)\)`,
-	),
-
-	// ── Class / struct / interface / trait / enum / object / record ──
-	// class UserService { … }            → name "UserService"
-	// public class Calculator { … }      → name "Calculator"
-	regexp.MustCompile(
-		`(?m)^[\t ]*(?:(?:public|private|protected|export|abstract|sealed|final|open|data|case)\s+)*` +
-			`\b(class|struct|interface|trait|enum|object|record|module|impl)\s+(\w+)`,
-	),
-
-	// ── Preprocessor #define ────────────────────────────────────────
-	regexp.MustCompile(`(?m)^[\t ]*#\s*define\s+(\w+)`),
-
-	// ── SQL DDL ─────────────────────────────────────────────────────
-	// CREATE TABLE users ( … )   → name "users"
-	regexp.MustCompile(`(?i)\bCREATE\s+(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER|INDEX)\s+(\w+)`),
-
-	// ── Shell / Bash functions ──────────────────────────────────────
-	// my_func() { … }   → name "my_func"
-	regexp.MustCompile(`(?m)^[\t ]*(\w+)\s*\(\)\s*\{`),
-
-	// ── YAML / JSON keys (any nesting level) ────────────────────────
-	regexp.MustCompile(`(?m)^[\t ]*"?(\w+)"?\s*:`),
-
-	// ── XML / HTML tags ─────────────────────────────────────────────
-	regexp.MustCompile(`<\s*(\w+)(?:\s[^>]*)?>`),
-
-	// ── Swift "func" ────────────────────────────────────────────────
-	regexp.MustCompile(`(?m)\bfunc\s+(\w+)\s*\(([^)]*)\)(?:\s*->\s*[^{]+)?`),
-
-	// ── Kotlin "fun" ────────────────────────────────────────────────
-	regexp.MustCompile(`(?m)\bfun\s+(\w+)\s*\(([^)]*)\)(?:\s*:\s*[^{]+)?`),
-
-	// ── Scala "def" ─────────────────────────────────────────────────
-	regexp.MustCompile(`(?m)\bdef\s+(\w+)\s*\(([^)]*)\)(?:\s*:\s*[^=]+)?\s*=`),
-
-	// ── Lisp / Clojure (defn) ───────────────────────────────────────
-	regexp.MustCompile(`\(\s*defn\s+([\w\-!]+)`),
-
-	// ── Markdown headings ───────────────────────────────────────────
-	regexp.MustCompile(`(?m)^[\t ]*#{1,6}\s+(.*)`),
-
-	// ── INI / TOML sections ─────────────────────────────────────────
-	regexp.MustCompile(`(?m)^[\t ]*\[\s*(\w+)\s*\]`),
-}
-
-// extractSignaturesUniversal applies all universal patterns to the source
-// text and returns a deduplicated slice of signatures.
-func extractSignaturesUniversal(source string) []Signature {
 	seen := make(map[string]bool)
 	var sigs []Signature
 
-	for _, re := range universalPatterns {
-		for _, match := range re.FindAllStringSubmatch(source, -1) {
+	for _, re := range spec.patterns {
+		locs := re.FindAllStringSubmatchIndex(sanitized, -1)
+		for _, loc := range locs {
+			match := submatchStrings(sanitized, loc)
 			name, full := extractNameAndFull(match)
 			if name == "" || isIgnoredKeyword(name) {
+				continue
+			}
+			// Skip declarations on ignored lines.
+			startLine := lineOf(sanitized, loc[0])
+			if ignored[startLine] {
 				continue
 			}
 			if seen[name] {
 				continue
 			}
 			seen[name] = true
-
-			sig := cleanSignature(full)
-			sigs = append(sigs, Signature{Name: name, Signature: sig})
+			sigs = append(sigs, Signature{Name: name, Signature: cleanSignature(full)})
 		}
 	}
 	return sigs
 }
 
-// extractNameAndFull deduces the human‑readable name from regex match groups.
+// submatchStrings converts a FindAllStringSubmatchIndex location slice into the
+// equivalent []string that FindStringSubmatch would return (empty string for
+// groups that did not participate in the match).
+func submatchStrings(src string, loc []int) []string {
+	out := make([]string, len(loc)/2)
+	for i := 0; i < len(loc); i += 2 {
+		if loc[i] < 0 {
+			out[i/2] = ""
+			continue
+		}
+		out[i/2] = src[loc[i]:loc[i+1]]
+	}
+	return out
+}
+
+// extractNameAndFull deduces the symbol name from regex capture groups.
 //
-// Many patterns capture two groups: a keyword (like "class" or "struct") and
-// an identifier. This function returns the identifier as the name.
-// For patterns that only capture a name (single group), that group is returned.
+// Patterns that capture a keyword (class/struct/…) plus an identifier put the
+// keyword in group 1 and the identifier in group 2. All other patterns put the
+// name in group 1.
 func extractNameAndFull(match []string) (string, string) {
 	if len(match) == 0 {
 		return "", ""
 	}
 	full := match[0]
 
-	// Patterns with two capture groups: m[1] is either a keyword or the name.
-	// If m[1] is a known type keyword and m[2] is non‑empty, use m[2] as the name.
 	if len(match) >= 3 && match[2] != "" && isTypeKeyword(match[1]) {
 		return match[2], full
 	}
-
-	// Otherwise, the first group (m[1]) is the name.
 	if len(match) >= 2 && match[1] != "" {
 		return match[1], full
 	}
-
 	return "", full
 }
 
-// isTypeKeyword returns true if s is a keyword that introduces a type/class
-// definition rather than the name itself.
 func isTypeKeyword(s string) bool {
 	switch s {
 	case "class", "struct", "interface", "trait", "enum",
-		"object", "record", "module", "impl":
+		"object", "record", "module", "impl", "union", "type":
 		return true
 	}
 	return false
 }
 
-// isIgnoredKeyword filters out common control‑flow keywords that some
-// patterns may accidentally match (e.g. "if", "for", "switch").
+// isIgnoredKeyword filters control-flow keywords that permissive patterns may
+// accidentally capture as function names.
 func isIgnoredKeyword(s string) bool {
 	switch s {
-	case "if", "for", "while", "switch", "return":
+	case "if", "for", "while", "switch", "return", "else", "catch",
+		"do", "match", "when", "with", "case", "select", "defer", "go":
 		return true
 	}
 	return false
 }
 
-// cleanSignature trims trailing braces, semicolons, and colons so the
-// signature remains compact.
+var wsCollapse = regexp.MustCompile(`[\t ]*\n[\t ]*`)
+
+// cleanSignature trims a raw match down to a compact one-line signature: it
+// stops at the opening brace / statement terminator and collapses any internal
+// newlines (from multi-line parameter lists) into single spaces.
 func cleanSignature(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if idx := strings.IndexAny(raw, "{;"); idx != -1 {
 		raw = strings.TrimSpace(raw[:idx])
 	}
-	return strings.TrimSuffix(raw, ":")
+	raw = wsCollapse.ReplaceAllString(raw, " ")
+	return strings.TrimSuffix(strings.TrimSpace(raw), ":")
 }
