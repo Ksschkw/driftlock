@@ -76,12 +76,7 @@ func (p *openAICompatible) sendAndParseCheck(ctx context.Context, userPrompt str
 }
 
 func (p *openAICompatible) sendForCompletion(ctx context.Context, userPrompt string) (string, error) {
-	system := `You are a documentation assistant. The user will provide a documentation file that is outdated for some code changes. Please rewrite the documentation to accurately reflect all the code changes.
-
-- Update any outdated descriptions, signatures, or examples.
-- If the changes introduce new functions, types, or concepts that are not yet documented, add new sections or paragraphs as needed.
-- Keep the existing writing style, tone, and structure. Preserve any parts that are still correct.
-- Output the complete updated markdown file, starting from the very first character and ending with the very last. Do not add any introductory or concluding remarks, explanations, code fences around the output, or any other text – just the raw markdown file.`
+	system := documentationFixSystemPrompt
 	body := map[string]interface{}{
 		"model": p.cfg.Model,
 		"messages": []map[string]string{
@@ -145,12 +140,22 @@ func (p *openAICompatible) doRequest(ctx context.Context, reqBody map[string]int
 				Content string `json:"content"`
 			} `json:"message"`
 		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
 	}
 	if err := json.Unmarshal(respBytes, &result); err != nil {
 		return "", fmt.Errorf("failed to parse LLM response: %w", err)
 	}
 	if len(result.Choices) == 0 {
 		return "", fmt.Errorf("empty response from LLM")
+	}
+
+	if os.Getenv("DRIFTLOCK_DEBUG") != "" && result.Usage.TotalTokens > 0 {
+		fmt.Fprintf(os.Stderr, "[DEBUG] token usage: prompt=%d completion=%d total=%d\n",
+			result.Usage.PromptTokens, result.Usage.CompletionTokens, result.Usage.TotalTokens)
 	}
 
 	return result.Choices[0].Message.Content, nil
