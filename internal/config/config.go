@@ -47,6 +47,16 @@ type BehaviorConfig struct {
 	// BlockOnLLMError forces a commit block when the LLM is unreachable,
 	// instead of allowing the commit with a warning.
 	BlockOnLLMError bool `toml:"block_on_llm_error"`
+	// Cache enables the content-addressed verdict cache, which avoids
+	// re-billing the LLM for identical (model, diff, doc) checks across
+	// commit amends, rebases, and CI re-runs. Enabled by default.
+	Cache *bool `toml:"cache"`
+}
+
+// CacheEnabled reports whether the verdict cache is on. It defaults to true
+// when the field is omitted from the config file.
+func (b BehaviorConfig) CacheEnabled() bool {
+	return b.Cache == nil || *b.Cache
 }
 
 // AuditConfig holds the optional Solana audit settings.
