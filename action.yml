@@ -1,0 +1,56 @@
+name: 'Driftlock'
+description: 'Fail a pull request when its documentation drifts from code (structural API changes not reflected in the docs).'
+branding:
+  icon: 'lock'
+  color: 'purple'
+
+inputs:
+  base:
+    description: 'Base git ref to compare against (the PR target).'
+    required: false
+    default: ${{ github.event.pull_request.base.sha }}
+  head:
+    description: 'Head git ref (the PR tip).'
+    required: false
+    default: ${{ github.sha }}
+  version:
+    description: 'Driftlock version to install (a git tag, or "latest").'
+    required: false
+    default: 'latest'
+  api-key:
+    description: 'LLM API key, exposed to Driftlock as $DRIFTLOCK_API_KEY. Pass a repository secret.'
+    required: false
+    default: ''
+  report-only:
+    description: 'When "true", report drift without failing the job (exit 0). Useful for gradual adoption.'
+    required: false
+    default: 'false'
+  working-directory:
+    description: 'Directory containing .driftlock.toml.'
+    required: false
+    default: '.'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        cache: false
+
+    - name: Install Driftlock
+      shell: bash
+      run: go install github.com/Ksschkw/driftlock/cmd/driftlock@${{ inputs.version }}
+
+    - name: Check documentation drift
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        DRIFTLOCK_API_KEY: ${{ inputs.api-key }}
+      run: |
+        flags=()
+        if [ "${{ inputs.report-only }}" = "true" ]; then
+          flags+=(--report)
+        fi
+        driftlock check --base "${{ inputs.base }}" --head "${{ inputs.head }}" "${flags[@]}"
