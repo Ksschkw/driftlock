@@ -61,12 +61,14 @@ func ExtractRelevantSections(markdown string, names []string) string {
 		}
 	}
 
-	// 3. Identify any names that never appeared in the document.
-	undocumented := make([]string, 0, len(lowerNames))
-	for name := range lowerNames {
+	// 3. Identify any names that never appeared in the document. The original
+	//    (case-preserved) name is reported so the LLM sees the real symbol.
+	undocumented := make([]string, 0, len(names))
+	for _, name := range names {
+		lower := strings.ToLower(name)
 		found := false
 		for _, sec := range sections {
-			if strings.Contains(strings.ToLower(sec.content), name) {
+			if strings.Contains(strings.ToLower(sec.content), lower) {
 				found = true
 				break
 			}
