@@ -1,0 +1,24 @@
+name: Documentation Drift
+
+# Runs Driftlock on every pull request and fails the check if the PR changes
+# public API signatures without updating the mapped documentation.
+
+on:
+  pull_request:
+
+jobs:
+  driftlock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          # Driftlock diffs base..head, so it needs both commits present.
+          fetch-depth: 0
+
+      - name: Run Driftlock
+        uses: Ksschkw/driftlock@main
+        with:
+          api-key: ${{ secrets.DRIFTLOCK_API_KEY }}
+          # Set report-only: 'true' during initial rollout to avoid blocking PRs.
+          report-only: 'false'
