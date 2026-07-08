@@ -14,5 +14,5 @@ type Signature struct {
 //
 //	and many more) as well as markup / data languages (JSON, YAML, XML, etc.).
 func ExtractSignatures(filePath string, source string) []Signature {
-	return extractSignaturesUniversal(source)
+	return extractSignatures(filePath, source)
 }
