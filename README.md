@@ -25,10 +25,24 @@ moment of every commit.
 6. [LLM Providers](#llm-providers)  
 7. [Commands](#commands)  
 8. [Behavior & Workflow](#behavior--workflow)  
-9. [Audit Trail (Solana)](#audit-trail-solana)  
-10. [Escaping the Hook](#escaping-the-hook)  
-11. [Development](#development)  
-12. [License](#license)
+9. [Continuous Integration](#continuous-integration)  
+10. [Ignoring Symbols](#ignoring-symbols)  
+11. [Caching & Cost](#caching--cost)  
+12. [Audit Trail (Solana)](#audit-trail-solana)  
+13. [Escaping the Hook](#escaping-the-hook)  
+14. [Development](#development)  
+15. [License](#license)
+
+> **Full documentation** lives in the [`docs/`](./docs/index.md) folder:
+> [Getting Started](./docs/getting-started.md) ·
+> [Tutorial](./docs/tutorial.md) ·
+> [Configuration](./docs/configuration.md) ·
+> [CI/CD](./docs/ci-cd.md) ·
+> [Providers](./docs/providers.md) ·
+> [Ignoring](./docs/ignoring.md) ·
+> [Caching](./docs/caching.md) ·
+> [Architecture](./docs/architecture.md) ·
+> [Troubleshooting](./docs/troubleshooting.md)
 
 ---
 
@@ -63,37 +77,30 @@ public signatures.
 
 ## What Counts as a Structural Change
 
-Driftlock uses a **universal parser** that recognizes structural elements
-in all major programming and markup languages:
+Driftlock parses source in **any language** and recognizes structural elements:
 
-- **Functions/methods** in any language (Python, Go, JavaScript, Rust,
-  Java, C, etc.)
-- **Classes/interfaces/structs** definitions
-- **Type declarations** (TypeScript, Go, Rust, etc.)
-- **SQL** table/view/procedure definitions
-- **YAML/JSON** keys at any nesting level
-- **XML/HTML** tags
-- **Markdown** headings
-- **INI/TOML** sections
-- **Shell** function definitions
+- **Functions/methods** — Go, Python, JavaScript/TypeScript, Java, C#, C/C++,
+  Rust, Swift, Kotlin, Scala, PHP, Ruby, Shell, Lua, Clojure, and more.
+- **Classes / interfaces / structs / traits / enums** definitions.
+- **Type declarations** (TypeScript, Go, Rust, etc.).
+- **SQL** table/view/procedure definitions.
+- **YAML/JSON** keys, **XML/HTML** tags, **INI/TOML** sections, **Markdown**
+  headings — for the corresponding data/markup file types.
 
-The parser matches patterns like:
-- `def function_name(params):` (Python)
-- `function name(params) {` (JavaScript)
-- `func name(params) returns` (Go)
-- `fn name(params) -> type {` (Rust) 
-- `public int method(params)` (Java/C#)
-- `CREATE TABLE name` (SQL)
-- `key: value` (YAML)
-- `<tag>` (XML/HTML)
+The parser **dispatches by file extension** — a `.go` file is only matched with
+Go patterns, never YAML or Markdown ones — and it **strips comments and string
+literals before matching**, so a signature that appears inside a comment or a
+string never produces a phantom change. Multi‑line signatures are supported.
 
 If the **signature** changes (added/removed parameter, different return type,
 renamed function), Driftlock will trigger. Adding a new function triggers it as
 well, even if the docs never mentioned it before – Driftlock will ask the LLM
-to create appropriate documentation.
+to create appropriate documentation. A **rename** shows up as one *removed* plus
+one *added* symbol.
 
 **Non‑triggers:** modifying a function body, renaming a local variable, adding
-a comment, or changing whitespace/formatting.
+a comment, or changing whitespace/formatting. You can also explicitly exclude a
+symbol with a [`driftlock:ignore`](#ignoring-symbols) annotation.
 
 If you want Driftlock to see the **full diff** (including bodies and comments)
 when structural changes *are* present, enable `include_full_diff = true` in
@@ -185,6 +192,7 @@ block_on_false = true
 block_on_llm_error = false
 max_retries = 2
 include_full_diff = false
+cache = true
 ```
 
 - `auto_fix` – if `true`, rewrites documentation when drift is detected.
@@ -192,6 +200,7 @@ include_full_diff = false
 - `block_on_llm_error` – if `true`, aborts the commit when the LLM is unreachable.
 - `max_retries` – number of retries with exponential backoff.
 - `include_full_diff` – if `true`, sends the complete `git diff` to the LLM (uses more tokens).
+- `cache` – if `true` (default), caches verdicts so identical checks never re‑bill the LLM. See [Caching & Cost](#caching--cost).
 
 ### `audit`
 
@@ -230,9 +239,16 @@ The `ollama` driver speaks the native Ollama API (default
 |---------|-------------|
 | `driftlock init` | Interactive guided setup (config, hook, .gitignore) |
 | `driftlock hook-run [--no-fix]` | Called by the pre‑commit hook |
-| `driftlock check` | Check for drift; never modifies files |
+| `driftlock check [--base REF] [--head REF] [--report] [--json]` | Check for drift; never modifies files. `--base` enables CI range mode |
 | `driftlock fix` | Force regeneration of all mapped documentation |
 | `driftlock log` | Show the last 20 audit log entries |
+| `driftlock status` | Show current status |
+
+`driftlock check` runs against the **staged index** by default (identical to the
+hook). Pass `--base` (and optionally `--head`) to compare two Git refs instead —
+this is how Driftlock runs in CI against a pull request. It exits non‑zero on
+drift (so it can gate a merge) unless `--report` is given, and can emit a
+machine‑readable report with `--json`. See [Continuous Integration](#continuous-integration).
 
 ---
 
@@ -254,7 +270,92 @@ When you run `git commit`:
    - If the LLM is unreachable, a yellow warning is shown. By default the
      commit proceeds; set `block_on_llm_error = true` to change that.
 
-Use `DRIFTLOCK_DEBUG=1` to see the raw LLM payloads and responses.
+Use `DRIFTLOCK_DEBUG=1` to see the raw LLM payloads and responses (including
+token usage).
+
+---
+
+## Continuous Integration
+
+Local hooks are per‑developer and easily bypassed. To enforce docs‑in‑sync for
+the whole team, run Driftlock in CI against every pull request. In CI it runs in
+**range mode** (comparing two Git refs) and never modifies files — it only
+passes or fails.
+
+### GitHub Action
+
+```yaml
+# .github/workflows/driftlock.yml
+name: Documentation Drift
+on: pull_request
+jobs:
+  driftlock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # both refs must be present
+      - uses: Ksschkw/driftlock@main
+        with:
+          api-key: ${{ secrets.DRIFTLOCK_API_KEY }}
+          report-only: 'false'      # 'true' to warn without failing during rollout
+```
+
+### Any CI system
+
+```bash
+driftlock check --base "$BASE_SHA" --head "$HEAD_SHA" --json
+```
+
+### pre‑commit framework
+
+Driftlock ships a [`pre-commit`](https://pre-commit.com) hook. Add to your
+`.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/Ksschkw/driftlock
+    rev: v0.3.0
+    hooks:
+      - id: driftlock
+```
+
+Full guide: [docs/ci-cd.md](./docs/ci-cd.md).
+
+---
+
+## Ignoring Symbols
+
+Not every signature belongs to your public contract. Exclude a specific
+declaration from analysis with a `driftlock:ignore` comment — it works in any
+language's comment syntax, either inline or on the line above:
+
+```go
+func internalHelper(x int) {} // driftlock:ignore
+
+// driftlock:ignore
+func alsoInternal() {}
+```
+
+An **inline** marker ignores only that declaration; a **standalone** comment
+line ignores the declaration immediately below it. To exclude whole areas of the
+codebase, scope your `[[doc_mapping]]` `sources` more narrowly. Full guide:
+[docs/ignoring.md](./docs/ignoring.md).
+
+---
+
+## Caching & Cost
+
+The LLM call is the dominant cost of running Driftlock. Because a verdict is a
+pure function of `(model, structural diff, documentation)`, Driftlock caches
+verdicts in `.driftlock/cache.json` and never re‑bills the LLM for an identical
+check — across commit amends, rebases, and CI re‑runs. Combined with
+**structural‑only diffs** and **smart chunking** (only the relevant doc sections
+are ever sent), this keeps token usage minimal.
+
+The cache is on by default; disable it with `cache = false` under `[behavior]`.
+Delete `.driftlock/cache.json` to clear it. Full guide:
+[docs/caching.md](./docs/caching.md).
 
 ---
 
@@ -282,15 +383,20 @@ recorded and publicly verifiable.
 
 ## Development
 
-Requirements: Go 1.22+
+Requirements: Go 1.24+
 
 ```bash
 git clone https://github.com/Ksschkw/driftlock.git
 cd driftlock
 go build -o driftlock ./cmd/driftlock
+go test ./...                     # run the test suite
+go test ./internal/parser -run TestNoFalsePositivesFromCommentsAndStrings -v
 # To test locally, add the build directory to your PATH or run
 # sudo cp driftlock /usr/local/bin/
 ```
+
+See [docs/architecture.md](./docs/architecture.md) for the package layout and
+design invariants.
 
 ---
 
