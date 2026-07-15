@@ -39,3 +39,18 @@ func TestStripPreambleMarkdown(t *testing.T) {
 		t.Errorf("unexpected: %q", out)
 	}
 }
+
+func TestStripReasoningThinkBlocks(t *testing.T) {
+	in := "<think>\nThe docs might be fine... no wait, TRUE seems wrong here.\n</think>\nFALSE. The new punctuation param is missing."
+	ok, _, err := parseCheckResponse(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("verdict inside <think> block leaked into parsing")
+	}
+	out := stripReasoning("<think>scratch</think>\n# Title\nbody")
+	if out != "# Title\nbody" {
+		t.Errorf("unexpected: %q", out)
+	}
+}
