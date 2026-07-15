@@ -75,3 +75,18 @@ func TestMergeIsNoOpForEmptyUpdate(t *testing.T) {
 		t.Error("empty update should return the document unchanged")
 	}
 }
+
+func TestMergeAppendsNewSections(t *testing.T) {
+	updated := "### Connect\n\nUpdated Connect docs.\n### Farewell\n\nBrand-new Farewell docs.\n"
+	merged := MergeSectionUpdates(sampleDoc, updated)
+	if !strings.Contains(merged, "Updated Connect docs.") {
+		t.Errorf("existing-section update lost:\n%s", merged)
+	}
+	if !strings.Contains(merged, "### Farewell") || !strings.Contains(merged, "Brand-new Farewell docs.") {
+		t.Errorf("new section was dropped instead of appended:\n%s", merged)
+	}
+	// New sections go at the end.
+	if strings.Index(merged, "### Farewell") < strings.Index(merged, "### Disconnect") {
+		t.Errorf("new section should be appended after existing content:\n%s", merged)
+	}
+}
