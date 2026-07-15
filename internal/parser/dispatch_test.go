@@ -1,6 +1,7 @@
 package parser_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/Ksschkw/driftlock/internal/parser"
@@ -157,5 +158,32 @@ def helper(x):
 	got := names(parser.ExtractSignatures("mystery.xyz", source))
 	if !got["Handler"] || !got["helper"] {
 		t.Errorf("universal fallback missed functions: %v", got)
+	}
+}
+
+// Signatures must carry their ORIGINAL text, including string-literal default
+// values. Matching runs on sanitized source (strings blanked), and an early
+// version emitted the blanked text — 'punctuation: str = "!"' surfaced to the
+// LLM as 'punctuation: str = "  "', producing wrong docs in E2E testing.
+func TestSignatureKeepsStringDefaults(t *testing.T) {
+	source := "def greet(name: str, excited: bool = False, punctuation: str = \"!\") -> str:\n    pass\n"
+	sigs := parser.ExtractSignatures("main.py", source)
+	if len(sigs) != 1 {
+		t.Fatalf("expected 1 signature, got %v", sigs)
+	}
+	if !strings.Contains(sigs[0].Signature, `"!"`) {
+		t.Errorf("string default lost from signature: %q", sigs[0].Signature)
+	}
+}
+
+// A brace inside a string default must not truncate the signature.
+func TestBraceInsideStringDoesNotTruncate(t *testing.T) {
+	source := "def fmt(tpl: str = \"{name}\") -> str:\n    pass\n"
+	sigs := parser.ExtractSignatures("fmt.py", source)
+	if len(sigs) != 1 {
+		t.Fatalf("expected 1 signature, got %v", sigs)
+	}
+	if !strings.Contains(sigs[0].Signature, "{name}") {
+		t.Errorf("signature truncated at brace inside string: %q", sigs[0].Signature)
 	}
 }
