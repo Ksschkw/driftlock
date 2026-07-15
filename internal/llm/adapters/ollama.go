@@ -55,7 +55,7 @@ func (o *ollama) Fix(ctx context.Context, diff, doc string) (string, error) {
 	if os.Getenv("DRIFTLOCK_DEBUG") != "" {
 		fmt.Fprintf(os.Stderr, "[DEBUG] Ollama raw response:\n%s\n[END DEBUG]\n", resp)
 	}
-	return stripPreambleMarkdown(resp), nil
+	return stripPreambleMarkdown(stripReasoning(resp)), nil
 }
 
 func (o *ollama) generate(ctx context.Context, prompt string) (string, error) {
