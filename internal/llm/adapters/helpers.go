@@ -43,6 +43,16 @@ func stripPreambleMarkdown(content string) string {
 
 var verdictRE = regexp.MustCompile(`(?i)\b(TRUE|FALSE)\b`)
 
+// thinkRE matches the <think>...</think> reasoning blocks emitted by
+// reasoning models (DeepSeek-R1, QwQ, etc.). Their contents are scratch work,
+// not the answer, and must never influence verdict parsing or doc output.
+var thinkRE = regexp.MustCompile(`(?is)<think>.*?</think>`)
+
+// stripReasoning removes reasoning-model scratch blocks from a response.
+func stripReasoning(text string) string {
+	return strings.TrimSpace(thinkRE.ReplaceAllString(text, ""))
+}
+
 // parseCheckResponse extracts a TRUE/FALSE verdict and explanation from an LLM
 // response. It is deliberately tolerant: models routinely wrap the verdict in
 // markdown (`**FALSE**`), prefix it with reasoning ("Answer: FALSE"), or lead
@@ -51,7 +61,7 @@ var verdictRE = regexp.MustCompile(`(?i)\b(TRUE|FALSE)\b`)
 // errors and, with block_on_llm_error, spurious commit blocks), we strip
 // common decorations and take the first standalone TRUE/FALSE token.
 func parseCheckResponse(text string) (bool, string, error) {
-	clean := strings.TrimSpace(text)
+	clean := stripReasoning(text)
 	// Strip surrounding markdown emphasis/code fences that models add.
 	stripped := strings.Map(func(r rune) rune {
 		switch r {
