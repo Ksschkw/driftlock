@@ -95,12 +95,14 @@ func ExtractRelevantSections(markdown string, names []string) (sections string, 
 
 // MergeSectionUpdates takes the full original markdown document and a string
 // that contains one or more updated sections (each starting with the original
-// heading).  It replaces the content of those sections in the full document
-// and returns the resulting complete document.
+// heading). It replaces the content of those sections in the full document and
+// returns the resulting complete document.
 //
-// The updatedSections string is expected to be a concatenation of sections,
-// each beginning with a markdown heading that exactly matches a heading in
-// fullDoc.  The replacement matches by heading text and heading level.
+// Sections in updatedSections whose headings match a heading in fullDoc
+// replace that section's content. Sections with genuinely NEW headings (e.g.
+// documentation for a symbol that had no section before) are appended to the
+// end of the document — previously they were silently dropped, which meant
+// auto-fix could never document a brand-new symbol under its own heading.
 func MergeSectionUpdates(fullDoc string, updatedSections string) string {
 	if updatedSections == "" {
 		return fullDoc
@@ -109,10 +111,20 @@ func MergeSectionUpdates(fullDoc string, updatedSections string) string {
 	origSections := splitIntoSections(fullDoc)
 	updated := splitIntoSections(updatedSections)
 
-	// Build a map from (heading level + text) to the new content for that section.
+	origHeadings := make(map[string]bool)
+	for _, os := range origSections {
+		origHeadings[strings.TrimRight(os.heading, "\n")] = true
+	}
+
+	// Build a map from heading to the new content for that section.
 	replacements := make(map[string]string)
+	var newSections []section
 	for _, us := range updated {
 		key := strings.TrimRight(us.heading, "\n")
+		if us.heading != "" && !origHeadings[key] {
+			newSections = append(newSections, us)
+			continue
+		}
 		replacements[key] = us.content
 	}
 
@@ -127,6 +139,15 @@ func MergeSectionUpdates(fullDoc string, updatedSections string) string {
 			result.WriteString(os.heading)
 			result.WriteString(os.content)
 		}
+	}
+
+	// Append genuinely new sections at the end.
+	for _, ns := range newSections {
+		if !strings.HasSuffix(result.String(), "\n") {
+			result.WriteString("\n")
+		}
+		result.WriteString(ns.heading)
+		result.WriteString(ns.content)
 	}
 	return result.String()
 }
