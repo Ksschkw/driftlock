@@ -333,6 +333,7 @@ func resolveSources(opts Options, rangeMode bool) ([]string, func(string) string
 func printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError bool, cfg *config.Config, dryRun bool) {
 	if anyLLMError && !cfg.Behavior.BlockOnLLMError {
 		fmt.Fprint(os.Stderr, output.YellowStr("\ndriftlock: Some documentation checks could not be completed due to LLM errors. Review manually.\n"))
+		return // a check that errored must not also claim success
 	}
 	if anyLLMError && cfg.Behavior.BlockOnLLMError && !dryRun {
 		fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: LLM check failed and block_on_llm_error is enabled.\n"))
