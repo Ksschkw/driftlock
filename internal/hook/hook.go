@@ -187,7 +187,21 @@ func RunWith(ctx context.Context, opts Options) error {
 			diffForLLM = fullDiff
 		}
 
-		chunkedDoc := docman.ExtractRelevantSections(fullDoc, changedNames)
+		// Chunk the doc to the sections mentioning changed symbols. The note
+		// (symbols not documented anywhere) is Driftlock metadata: it goes to
+		// the LLM as context but must never be embedded in doc content, or the
+		// auto-fix would write it verbatim into the user's documentation.
+		chunkedDoc, chunkNote := docman.ExtractRelevantSections(fullDoc, changedNames)
+		wholeDoc := chunkedDoc == ""
+		if wholeDoc {
+			// No section mentions any changed symbol (e.g. all-new API): fall
+			// back to the full document so the fix can append new content.
+			chunkedDoc = fullDoc
+		}
+		checkDoc := chunkedDoc
+		if chunkNote != "" {
+			checkDoc += "\n\n" + chunkNote
+		}
 		if os.Getenv("DRIFTLOCK_DEBUG") != "" {
 			fmt.Fprintf(os.Stderr, "[DEBUG] %s chunked doc: %d bytes (full: %d)\n", docPath, len(chunkedDoc), len(fullDoc))
 		}
@@ -195,7 +209,7 @@ func RunWith(ctx context.Context, opts Options) error {
 		dr := DocResult{Doc: docPath, Changes: summarizeChanges(allChanges)}
 
 		// Consult the cache before spending tokens.
-		cacheKey := cache.Key(cfg.LLM.Model, diffForLLM, chunkedDoc)
+		cacheKey := cache.Key(cfg.LLM.Model, diffForLLM, checkDoc)
 		var result checkResult
 		if cached, ok := verdictCache.Get(cacheKey); ok {
 			result = checkResult{ok: cached.OK, explanation: cached.Explanation}
@@ -203,7 +217,7 @@ func RunWith(ctx context.Context, opts Options) error {
 				fmt.Fprintf(os.Stderr, "[DEBUG] %s: cache hit\n", docPath)
 			}
 		} else {
-			result = checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffForLLM, chunkedDoc)
+			result = checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffForLLM, checkDoc)
 			if result.err == nil {
 				verdictCache.Set(cacheKey, cache.Entry{OK: result.ok, Explanation: result.explanation})
 			}
