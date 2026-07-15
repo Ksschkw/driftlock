@@ -24,7 +24,7 @@ func extractSignatures(filePath, source string) []Signature {
 		locs := re.FindAllStringSubmatchIndex(sanitized, -1)
 		for _, loc := range locs {
 			match := submatchStrings(sanitized, loc)
-			name, full := extractNameAndFull(match)
+			name, _ := extractNameAndFull(match)
 			if name == "" || isIgnoredKeyword(name) {
 				continue
 			}
@@ -37,7 +37,17 @@ func extractSignatures(filePath, source string) []Signature {
 				continue
 			}
 			seen[name] = true
-			sigs = append(sigs, Signature{Name: name, Signature: cleanSignature(full)})
+			// The signature text comes from the ORIGINAL source (matching runs
+			// on the sanitized copy, whose string literals are blanked — using
+			// it would erase default values like `punctuation: str = "!"`).
+			// The brace/semicolon cut point is computed on the sanitized slice
+			// so a '{' or ';' inside a string can never truncate the signature.
+			sanSlice := sanitized[loc[0]:loc[1]]
+			origSlice := source[loc[0]:loc[1]]
+			if cut := strings.IndexAny(sanSlice, "{;"); cut != -1 {
+				origSlice = origSlice[:cut]
+			}
+			sigs = append(sigs, Signature{Name: name, Signature: tidySignature(origSlice)})
 		}
 	}
 	return sigs
@@ -100,6 +110,14 @@ func isIgnoredKeyword(s string) bool {
 
 var wsCollapse = regexp.MustCompile(`[\t ]*\n[\t ]*`)
 
+// tidySignature compacts a signature slice whose brace/semicolon truncation has
+// already been decided by the caller (on sanitized text): it collapses internal
+// newlines from multi-line parameter lists and trims decoration.
+func tidySignature(raw string) string {
+	raw = wsCollapse.ReplaceAllString(strings.TrimSpace(raw), " ")
+	return strings.TrimSuffix(strings.TrimSpace(raw), ":")
+}
+
 // cleanSignature trims a raw match down to a compact one-line signature: it
 // stops at the opening brace / statement terminator and collapses any internal
 // newlines (from multi-line parameter lists) into single spaces.
@@ -108,6 +126,5 @@ func cleanSignature(raw string) string {
 	if idx := strings.IndexAny(raw, "{;"); idx != -1 {
 		raw = strings.TrimSpace(raw[:idx])
 	}
-	raw = wsCollapse.ReplaceAllString(raw, " ")
-	return strings.TrimSuffix(strings.TrimSpace(raw), ":")
+	return tidySignature(raw)
 }
