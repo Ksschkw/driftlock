@@ -199,8 +199,14 @@ func RunWith(ctx context.Context, opts Options) error {
 			chunkedDoc = fullDoc
 		}
 		checkDoc := chunkedDoc
+		// The note travels with the DIFF, not the doc: it is change metadata
+		// ("these symbols are documented nowhere"), the check needs it to
+		// judge, and the fix needs it to know what to add — but it must never
+		// be part of the document content or the fix will write it verbatim
+		// into the user's docs.
+		diffWithNote := diffForLLM
 		if chunkNote != "" {
-			checkDoc += "\n\n" + chunkNote
+			diffWithNote += "\n\n" + chunkNote
 		}
 		if os.Getenv("DRIFTLOCK_DEBUG") != "" {
 			fmt.Fprintf(os.Stderr, "[DEBUG] %s chunked doc: %d bytes (full: %d)\n", docPath, len(chunkedDoc), len(fullDoc))
@@ -209,7 +215,7 @@ func RunWith(ctx context.Context, opts Options) error {
 		dr := DocResult{Doc: docPath, Changes: summarizeChanges(allChanges)}
 
 		// Consult the cache before spending tokens.
-		cacheKey := cache.Key(cfg.LLM.Model, diffForLLM, checkDoc)
+		cacheKey := cache.Key(cfg.LLM.Model, diffWithNote, checkDoc)
 		var result checkResult
 		if cached, ok := verdictCache.Get(cacheKey); ok {
 			result = checkResult{ok: cached.OK, explanation: cached.Explanation}
@@ -217,7 +223,7 @@ func RunWith(ctx context.Context, opts Options) error {
 				fmt.Fprintf(os.Stderr, "[DEBUG] %s: cache hit\n", docPath)
 			}
 		} else {
-			result = checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffForLLM, checkDoc)
+			result = checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffWithNote, checkDoc)
 			if result.err == nil {
 				verdictCache.Set(cacheKey, cache.Entry{OK: result.ok, Explanation: result.explanation})
 			}
@@ -254,7 +260,7 @@ func RunWith(ctx context.Context, opts Options) error {
 		}
 
 		if !result.ok && cfg.Behavior.AutoFix && !dryRun && !noFix && !opts.Report {
-			updatedSections, ferr := provider.Fix(ctx, diffForLLM, chunkedDoc)
+			updatedSections, ferr := provider.Fix(ctx, diffWithNote, chunkedDoc)
 			if ferr != nil {
 				if !opts.JSON {
 					fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("auto-fix failed for %s: %v\n", docPath, ferr)))
