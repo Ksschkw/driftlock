@@ -8,13 +8,17 @@ import (
 var headingRE = regexp.MustCompile(`(?m)^(#{1,6})\s+(.*)`)
 
 // ExtractRelevantSections returns only the most specific sections of the
-// markdown document whose content mentions any of the given names.  Ancestor
-// sections are excluded to avoid duplicated content.  If no sections are
-// found, a short note about undocumented symbols is returned.
-// The full document is never returned.
-func ExtractRelevantSections(markdown string, names []string) string {
+// markdown document whose content mentions any of the given names, plus a
+// separate note describing symbols that appear nowhere in the document.
+// Ancestor sections are excluded to avoid duplicated content. The full
+// document is never returned.
+//
+// The note MUST NOT be embedded in the returned sections: it is Driftlock
+// metadata for the LLM's context, and embedding it in the doc content caused
+// it to be preserved verbatim into users' documentation by the auto-fix.
+func ExtractRelevantSections(markdown string, names []string) (sections string, note string) {
 	if len(names) == 0 {
-		return "No changed symbols were provided."
+		return "", "No changed symbols were provided."
 	}
 
 	lowerNames := make(map[string]bool)
@@ -22,11 +26,11 @@ func ExtractRelevantSections(markdown string, names []string) string {
 		lowerNames[strings.ToLower(n)] = true
 	}
 
-	sections := splitIntoSections(markdown)
+	secs := splitIntoSections(markdown)
 
 	// 1. Find all sections that mention any changed name.
-	matchingIdx := make([]bool, len(sections))
-	for i, sec := range sections {
+	matchingIdx := make([]bool, len(secs))
+	for i, sec := range secs {
 		lower := strings.ToLower(sec.content)
 		for name := range lowerNames {
 			if strings.Contains(lower, name) {
@@ -37,17 +41,16 @@ func ExtractRelevantSections(markdown string, names []string) string {
 	}
 
 	// 2. Keep only the deepest matching sections: a section is kept if none
-	//    of its descendants (higher level = smaller heading depth) are also
-	//    matching.  This avoids duplicate content.
+	//    of its descendants are also matching. This avoids duplicate content.
 	var selected []string
-	for i, sec := range sections {
+	for i, sec := range secs {
 		if !matchingIdx[i] {
 			continue
 		}
 		hasMatchingChild := false
 		level := countHeadingLevel(sec.heading)
-		for j := i + 1; j < len(sections); j++ {
-			childLevel := countHeadingLevel(sections[j].heading)
+		for j := i + 1; j < len(secs); j++ {
+			childLevel := countHeadingLevel(secs[j].heading)
 			if childLevel <= level {
 				break
 			}
@@ -67,7 +70,7 @@ func ExtractRelevantSections(markdown string, names []string) string {
 	for _, name := range names {
 		lower := strings.ToLower(name)
 		found := false
-		for _, sec := range sections {
+		for _, sec := range secs {
 			if strings.Contains(strings.ToLower(sec.content), lower) {
 				found = true
 				break
@@ -78,18 +81,16 @@ func ExtractRelevantSections(markdown string, names []string) string {
 		}
 	}
 
-	if len(selected) > 0 {
-		result := strings.Join(selected, "\n")
-		if len(undocumented) > 0 {
-			result += "\n\nThe following changed symbols are not mentioned in the documentation: " + strings.Join(undocumented, ", ") + "."
-		}
-		return result
-	}
-
 	if len(undocumented) > 0 {
-		return "None of the changed symbols (" + strings.Join(undocumented, ", ") + ") appear in the documentation."
+		note = "The following changed symbols are not mentioned in the documentation: " + strings.Join(undocumented, ", ") + "."
 	}
-	return "The documentation does not mention any of the changed symbols."
+	if len(selected) > 0 {
+		return strings.Join(selected, "\n"), note
+	}
+	if note == "" {
+		note = "The documentation does not mention any of the changed symbols."
+	}
+	return "", note
 }
 
 // MergeSectionUpdates takes the full original markdown document and a string
