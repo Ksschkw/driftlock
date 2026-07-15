@@ -26,12 +26,12 @@ Documentation file:
 {{ .Doc }}
 
 Answer exactly TRUE if every changed signature is correctly reflected in the documentation, otherwise FALSE. Then provide a one-sentence explanation.`,
-		Fix: `Rewrite the documentation fragment below so it accurately reflects the code changes. Preserve every Markdown heading exactly as given (identical text and level) — the result is merged back into the full document by matching headings. Rewrite only the content provided; do not invent surrounding structure. Output only the rewritten Markdown, nothing else.
+		Fix: `Update the documentation fragment below so it accurately reflects the code changes. Preserve every Markdown heading exactly as given (identical text and level) — the result is merged back into the full document by matching headings. Keep ALL existing content that is still accurate: update what the code changed, add what is missing, and delete nothing that remains true. Output only the updated Markdown, nothing else.
 
 Code changes:
 {{ .Diff }}
 
-Documentation to rewrite:
+Documentation to update:
 {{ .Doc }}`,
 	}
 }
