@@ -96,7 +96,7 @@ func (p *openAICompatible) sendForCompletion(ctx context.Context, userPrompt str
 	if os.Getenv("DRIFTLOCK_DEBUG") != "" {
 		fmt.Fprintf(os.Stderr, "[DEBUG] LLM raw response:\n%s\n[END DEBUG]\n", raw)
 	}
-	cleaned := stripPreambleMarkdown(raw)
+	cleaned := stripPreambleMarkdown(stripReasoning(raw))
 	return cleaned, nil
 }
 
