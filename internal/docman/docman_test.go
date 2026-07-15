@@ -24,7 +24,7 @@ The Disconnect function closes a session.
 `
 
 func TestExtractRelevantSectionsPicksDeepest(t *testing.T) {
-	out := ExtractRelevantSections(sampleDoc, []string{"Connect"})
+	out, note := ExtractRelevantSections(sampleDoc, []string{"Connect"})
 	if !strings.Contains(out, "### Connect") {
 		t.Errorf("expected the Connect section, got:\n%s", out)
 	}
@@ -36,12 +36,21 @@ func TestExtractRelevantSectionsPicksDeepest(t *testing.T) {
 	if strings.Contains(out, "Intro text.") {
 		t.Errorf("ancestor/intro content should be excluded:\n%s", out)
 	}
+	if note != "" {
+		t.Errorf("documented symbol should produce no note, got %q", note)
+	}
 }
 
 func TestExtractReportsUndocumentedSymbols(t *testing.T) {
-	out := ExtractRelevantSections(sampleDoc, []string{"BrandNewThing"})
-	if !strings.Contains(out, "BrandNewThing") {
-		t.Errorf("expected undocumented symbol to be reported, got:\n%s", out)
+	out, note := ExtractRelevantSections(sampleDoc, []string{"BrandNewThing"})
+	// The note must carry the symbol, and it must NOT be embedded in the
+	// section content (that caused the auto-fix to write Driftlock metadata
+	// verbatim into user documentation).
+	if !strings.Contains(note, "BrandNewThing") {
+		t.Errorf("expected undocumented symbol in note, got note=%q", note)
+	}
+	if strings.Contains(out, "BrandNewThing") {
+		t.Errorf("note text leaked into section content:\n%s", out)
 	}
 }
 
