@@ -216,8 +216,14 @@ func RunWith(ctx context.Context, opts Options) error {
 
 		dr := DocResult{Doc: docPath, Changes: summarizeChanges(allChanges)}
 
-		// Consult the cache before spending tokens.
-		cacheKey := cache.Key(cfg.LLM.Model, diffWithNote, checkDoc)
+		// Consult the cache before spending tokens. The check prompt is part
+		// of the key: improving the prompt must invalidate verdicts produced by
+		// the old one (a nil Prompts means the built-in default is used).
+		checkPrompt := types.DefaultPrompts().Check
+		if cfg.LLM.Prompts != nil && cfg.LLM.Prompts.Check != "" {
+			checkPrompt = cfg.LLM.Prompts.Check
+		}
+		cacheKey := cache.Key(cfg.LLM.Model, checkPrompt, diffWithNote, checkDoc)
 		var result checkResult
 		if cached, ok := verdictCache.Get(cacheKey); ok {
 			result = checkResult{ok: cached.OK, explanation: cached.Explanation}

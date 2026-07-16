@@ -30,12 +30,19 @@ type Cache struct {
 	enabled bool
 }
 
-// Key derives a stable cache key from the model name and the exact check
-// inputs. Any change to the diff, the documentation, or the model produces a
-// different key, so stale verdicts are never served.
-func Key(model, diff, doc string) string {
+// Key derives a stable cache key from the model name, the check prompt, and the
+// exact check inputs. Any change to the model, the prompt, the diff, or the
+// documentation produces a different key, so stale verdicts are never served.
+//
+// The prompt MUST be part of the key: a verdict is a function of the prompt as
+// much as the inputs, so improving the check prompt has to invalidate verdicts
+// produced by the old one. Omitting it caused a stale FALSE (from a weaker
+// prompt) to keep blocking a commit whose docs were already correct.
+func Key(model, prompt, diff, doc string) string {
 	h := sha256.New()
 	h.Write([]byte(model))
+	h.Write([]byte{0})
+	h.Write([]byte(prompt))
 	h.Write([]byte{0})
 	h.Write([]byte(diff))
 	h.Write([]byte{0})

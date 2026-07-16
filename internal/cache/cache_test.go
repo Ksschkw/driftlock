@@ -6,18 +6,21 @@ import (
 )
 
 func TestKeyStability(t *testing.T) {
-	a := Key("model-x", "diff", "doc")
-	b := Key("model-x", "diff", "doc")
+	a := Key("model-x", "prompt", "diff", "doc")
+	b := Key("model-x", "prompt", "diff", "doc")
 	if a != b {
 		t.Fatal("identical inputs must produce identical keys")
 	}
-	if a == Key("model-y", "diff", "doc") {
+	if a == Key("model-y", "prompt", "diff", "doc") {
 		t.Error("model change must change the key")
 	}
-	if a == Key("model-x", "diff2", "doc") {
+	if a == Key("model-x", "prompt2", "diff", "doc") {
+		t.Error("prompt change must change the key (stale verdicts from an old prompt must not be served)")
+	}
+	if a == Key("model-x", "prompt", "diff2", "doc") {
 		t.Error("diff change must change the key")
 	}
-	if a == Key("model-x", "diff", "doc2") {
+	if a == Key("model-x", "prompt", "diff", "doc2") {
 		t.Error("doc change must change the key")
 	}
 }
@@ -25,7 +28,7 @@ func TestKeyStability(t *testing.T) {
 func TestRoundTripPersistence(t *testing.T) {
 	dir := t.TempDir()
 	c := Load(dir, true)
-	k := Key("m", "d", "doc")
+	k := Key("m", "p", "d", "doc")
 	c.Set(k, Entry{OK: false, Explanation: "outdated"})
 	if err := c.Save(); err != nil {
 		t.Fatal(err)
