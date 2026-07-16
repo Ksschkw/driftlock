@@ -90,3 +90,20 @@ func TestMergeAppendsNewSections(t *testing.T) {
 		t.Errorf("new section should be appended after existing content:\n%s", merged)
 	}
 }
+
+// LLMs emit headings with trailing whitespace; matching and dedup must be
+// whitespace-insensitive (E2E: '## Usage ' vs '## Usage' duplicated a section).
+func TestMergeMatchesHeadingsDespiteTrailingWhitespace(t *testing.T) {
+	doc := "## Usage \n\nOld usage text.\n"
+	updated := "## Usage\n\nNew usage text.\n### Extras \n\nExtra section.\n### Extras\n\nExtra section again.\n"
+	merged := MergeSectionUpdates(doc, updated)
+	if !strings.Contains(merged, "New usage text.") {
+		t.Errorf("trailing-whitespace heading failed to match for replacement:\n%s", merged)
+	}
+	if strings.Contains(merged, "Old usage text.") {
+		t.Errorf("old content survived a matched replacement:\n%s", merged)
+	}
+	if strings.Count(merged, "### Extras") != 1 {
+		t.Errorf("whitespace-variant new sections were not deduplicated:\n%s", merged)
+	}
+}
