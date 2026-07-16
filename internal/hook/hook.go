@@ -129,8 +129,10 @@ func RunWith(ctx context.Context, opts Options) error {
 		return fmt.Errorf("failed to create LLM provider: %w", err)
 	}
 
+	// NOTE: saved explicitly before every return/exit — os.Exit skips defers,
+	// and the blocked-commit path is exactly when fresh verdicts must persist
+	// (the retry after staging docs should hit the cache, not re-bill the LLM).
 	verdictCache := cache.Load(root, cfg.Behavior.CacheEnabled())
-	defer func() { _ = verdictCache.Save() }()
 
 	var fullDiff string
 	if cfg.Behavior.IncludeFullDiff {
@@ -299,6 +301,10 @@ func RunWith(ctx context.Context, opts Options) error {
 		printJSON(report)
 	} else {
 		printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError, cfg, dryRun)
+	}
+
+	if err := verdictCache.Save(); err != nil && !opts.JSON {
+		fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not save verdict cache: %v\n", err)))
 	}
 
 	// Report mode is purely informational.
