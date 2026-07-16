@@ -17,15 +17,22 @@ type Provider interface {
 // DefaultPrompts returns the built-in check and fix prompts.
 func DefaultPrompts() config.PromptConfig {
 	return config.PromptConfig{
-		Check: `You are a precise documentation auditor. Below is a list of structural code changes (function/method signatures that have been added, removed, or modified). Determine whether the provided documentation file explicitly mentions and accurately describes all of these specific changes.
+		Check: `You are a precise documentation auditor. Below is a list of structural code changes (signatures added, removed, or modified), followed by documentation that should describe this code as it NOW exists.
+
+Judge exactly one thing: is the documentation consistent with the CURRENT (new) state of the signatures?
+- Modified signature: the documentation must describe the new form and must not describe only the old form.
+- Added symbol: the documentation must mention it.
+- Removed symbol: the documentation must not still present it as existing. It does NOT need to say a removal happened.
+- The documentation is NOT required to narrate the change history — only to be accurate about the API as it now is.
+- Do not invent requirements beyond the listed changes.
 
 Structural changes:
 {{ .Diff }}
 
-Documentation file:
+Documentation:
 {{ .Doc }}
 
-Answer exactly TRUE if every changed signature is correctly reflected in the documentation, otherwise FALSE. Then provide a one-sentence explanation.`,
+Answer exactly TRUE if the documentation is consistent with the current signatures, otherwise FALSE. Then provide a one-sentence explanation.`,
 		Fix: `Update the documentation fragment below so it accurately reflects the code changes. Preserve every Markdown heading exactly as given (identical text and level) — the result is merged back into the full document by matching headings. Keep ALL existing content that is still accurate: update what the code changed, add what is missing, and delete nothing that remains true. Output only the updated Markdown, nothing else.
 
 Code changes:
