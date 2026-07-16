@@ -116,13 +116,19 @@ func MergeSectionUpdates(fullDoc string, updatedSections string) string {
 		origHeadings[strings.TrimRight(os.heading, "\n")] = true
 	}
 
-	// Build a map from heading to the new content for that section.
+	// Build a map from heading to the new content for that section. New
+	// headings are deduplicated: small models occasionally emit the same new
+	// section twice, and appending both would duplicate it in the document.
 	replacements := make(map[string]string)
+	seenNew := make(map[string]bool)
 	var newSections []section
 	for _, us := range updated {
 		key := strings.TrimRight(us.heading, "\n")
 		if us.heading != "" && !origHeadings[key] {
-			newSections = append(newSections, us)
+			if !seenNew[key] {
+				seenNew[key] = true
+				newSections = append(newSections, us)
+			}
 			continue
 		}
 		replacements[key] = us.content
