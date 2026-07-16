@@ -179,7 +179,7 @@ api_key = "${DRIFTLOCK_API_KEY}"   # env var expansion
 - `driver` – adapter: `openai-compatible` (OpenRouter, Groq, DeepSeek, Together, vLLM) or `ollama`.
 - `endpoint` – **full URL** of the chat completions endpoint. Nothing is appended.
 - `model` – model name as the provider expects it.
-- `api_key` – use `${ENV_VAR}` to reference an environment variable.
+- `api_key` – use `${ENV_VAR}` to reference an environment variable. Driftlock loads a gitignored `.env` from the project root, so `api_key = "${DRIFTLOCK_API_KEY}"` resolves from `.env` without exporting it each shell. Ollama needs no key. Since the secret stays in `.env`, commit `.driftlock.toml` so your team shares one policy (`driftlock init` sets this up for you).
 - `options` – extra parameters passed directly to the API (`temperature`, `max_tokens`, etc.).
 - `[llm.prompts]` – optional override of the built‑in check and fix prompts.
 

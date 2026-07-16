@@ -221,6 +221,38 @@ driftlock log
 
 Any `${ENV_VAR}` in `api_key`, `endpoint`, or the `[llm.prompts]` strings is expanded at load time.
 
+### `.env` files
+
+Driftlock loads a `.env` file from the project root (next to `.driftlock.toml`)
+before expanding `${ENV_VAR}` references, so you can keep your key in a local,
+gitignored file instead of exporting it in every shell:
+
+```bash
+# .env  (gitignored)
+DRIFTLOCK_API_KEY=sk-...
+```
+
+```toml
+# .driftlock.toml  (committed)
+[llm]
+  api_key = "${DRIFTLOCK_API_KEY}"
+```
+
+A variable already set in your real shell environment takes precedence over the
+`.env` file, and a missing `.env` is simply ignored. Ollama users need no key at
+all — leave `api_key` empty and skip the `.env` entirely.
+
+### Sharing config with a team
+
+Because the secret lives in `.env` (or the environment), the `.driftlock.toml`
+itself contains no secret and **should be committed** so your whole team shares
+one policy — the same doc mappings, model, prompts, and blocking behavior. This
+is what `driftlock init` sets up automatically: if you paste a literal key, it
+offers to move it into `.env`, rewrites the config to `${DRIFTLOCK_API_KEY}`, and
+gitignores `.env` and `.driftlock/` while leaving `.driftlock.toml` committable.
+If you decline (keeping a literal key in the file), `init` gitignores
+`.driftlock.toml` too, so the secret is never committed.
+
 ---
 
 ## A complete example
