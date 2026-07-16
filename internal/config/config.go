@@ -111,6 +111,10 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file %s: %w", configPath, err)
 	}
 
+	// Load a sibling .env before expanding, so ${VARS} referenced in the config
+	// resolve from it. Real shell environment variables take precedence.
+	LoadDotEnv(filepath.Dir(configPath))
+
 	// Expand environment variables in string fields.
 	cfg.LLM.APIKey = os.ExpandEnv(cfg.LLM.APIKey)
 	cfg.LLM.Endpoint = os.ExpandEnv(cfg.LLM.Endpoint)
