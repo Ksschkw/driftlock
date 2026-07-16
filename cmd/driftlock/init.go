@@ -40,6 +40,23 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Build the configuration interactively.
 	cfg := interactiveConfig()
 
+	// Decide how to handle the API key so the config can be safely committed.
+	// A literal secret must never be committed; an ${ENV_VAR} reference is safe.
+	keyIsLiteral := isLiteralSecret(cfg.LLM.APIKey)
+	if keyIsLiteral {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Println()
+		fmt.Println("You entered an API key directly. Committing it is unsafe.")
+		if promptBool(reader, "Store it in .env and reference ${DRIFTLOCK_API_KEY} in the config (recommended)", true) {
+			if err := writeEnvKey(root, "DRIFTLOCK_API_KEY", cfg.LLM.APIKey); err != nil {
+				return fmt.Errorf("failed to write .env: %w", err)
+			}
+			cfg.LLM.APIKey = "${DRIFTLOCK_API_KEY}"
+			keyIsLiteral = false
+			fmt.Println("Wrote the key to .env; the config now references ${DRIFTLOCK_API_KEY}.")
+		}
+	}
+
 	// Write the config file.
 	if err := config.WriteConfig(configPath, cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
@@ -56,16 +73,59 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to write hook script: %w", err)
 	}
 
-	// Update .gitignore.
-	if err := updateGitignore(root); err != nil {
+	// Update .gitignore. Always ignore local state (.driftlock/) and secrets
+	// (.env). Only ignore .driftlock.toml itself when it still holds a literal
+	// key — otherwise leave it committable so teams share one policy file.
+	if err := updateGitignore(root, keyIsLiteral); err != nil {
 		fmt.Printf("warning: could not update .gitignore: %v\n", err)
 	}
 
 	fmt.Println()
 	fmt.Println("Driftlock initialized successfully.")
-	fmt.Println("A .driftlock.toml has been created, the pre-commit hook is active,")
-	fmt.Println("and .driftlock.toml and .driftlock/ have been added to .gitignore.")
+	if keyIsLiteral {
+		fmt.Println("Your config contains a literal API key, so .driftlock.toml was")
+		fmt.Println("added to .gitignore. To share config with your team, move the key")
+		fmt.Println("to .env and set api_key = \"${DRIFTLOCK_API_KEY}\", then commit the config.")
+	} else {
+		fmt.Println("The pre-commit hook is active. .driftlock.toml is safe to commit")
+		fmt.Println("(it holds no secret) so your team shares one policy; .env and")
+		fmt.Println(".driftlock/ are gitignored.")
+	}
 	return nil
+}
+
+// isLiteralSecret reports whether an api_key value is a real secret that must
+// not be committed, as opposed to an empty value (Ollama needs none) or an
+// ${ENV_VAR} reference (safe — the secret lives in the environment/.env).
+func isLiteralSecret(key string) bool {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return false
+	}
+	return !strings.Contains(key, "${")
+}
+
+// writeEnvKey appends KEY=value to the project's .env file, creating it if
+// needed and avoiding a duplicate entry for the same key.
+func writeEnvKey(root, name, value string) error {
+	envPath := filepath.Join(root, ".env")
+	existing, err := os.ReadFile(envPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if strings.Contains(string(existing), name+"=") {
+		return nil // already present; do not clobber
+	}
+	f, err := os.OpenFile(envPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if len(existing) > 0 && !strings.HasSuffix(string(existing), "\n") {
+		f.WriteString("\n")
+	}
+	_, err = f.WriteString(name + "=" + value + "\n")
+	return err
 }
 
 // interactiveConfig prompts the user for every configuration section.
@@ -158,10 +218,17 @@ func promptBool(r *bufio.Reader, label string, def bool) bool {
 	return answer == "y" || answer == "yes"
 }
 
-// updateGitignore ensures .driftlock.toml and .driftlock/ are in .gitignore.
-func updateGitignore(root string) error {
+// updateGitignore ensures the appropriate entries are in .gitignore. Local
+// state (.driftlock/) and secrets (.env) are always ignored. The config file
+// itself is ignored only when it still holds a literal API key; when the key
+// is externalized to an env var, the config is committable so a team shares
+// one policy.
+func updateGitignore(root string, ignoreConfig bool) error {
 	ignorePath := filepath.Join(root, ".gitignore")
-	entries := []string{".driftlock.toml", ".driftlock/"}
+	entries := []string{".driftlock/", ".env"}
+	if ignoreConfig {
+		entries = append(entries, ".driftlock.toml")
+	}
 
 	existing, err := os.ReadFile(ignorePath)
 	if err != nil && !os.IsNotExist(err) {
@@ -179,9 +246,21 @@ func updateGitignore(root string) error {
 		f.WriteString("\n")
 	}
 	for _, e := range entries {
-		if !strings.Contains(content, e) {
+		if !gitignoreHasEntry(content, e) {
 			f.WriteString(e + "\n")
 		}
 	}
 	return nil
+}
+
+// gitignoreHasEntry reports whether a gitignore already lists an exact entry,
+// matching whole lines so that ".env" is not considered present merely because
+// ".driftlock/" or a comment contains the substring.
+func gitignoreHasEntry(content, entry string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == entry {
+			return true
+		}
+	}
+	return false
 }
