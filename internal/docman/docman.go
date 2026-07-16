@@ -108,23 +108,29 @@ func MergeSectionUpdates(fullDoc string, updatedSections string) string {
 		return fullDoc
 	}
 
-	origSections := splitIntoSections(fullDoc)
-	updated := splitIntoSections(updatedSections)
+	// Leaf (non-overlapping) splits are essential here: the hierarchical split
+	// used for extraction includes subsection text inside the parent's content,
+	// so reconstructing or appending from it duplicates every nested section
+	// (observed in E2E as a doubled '### ...' block in the user's README).
+	origSections := splitIntoLeafSections(fullDoc)
+	updated := splitIntoLeafSections(updatedSections)
 
 	origHeadings := make(map[string]bool)
 	for _, os := range origSections {
-		origHeadings[strings.TrimRight(os.heading, "\n")] = true
+		origHeadings[headingKey(os.heading)] = true
 	}
 
-	// Build a map from heading to the new content for that section. New
-	// headings are deduplicated: small models occasionally emit the same new
-	// section twice, and appending both would duplicate it in the document.
+	// Headings present in the original are replacements; unseen headings are
+	// new sections, deduplicated and appended at the end.
 	replacements := make(map[string]string)
 	seenNew := make(map[string]bool)
 	var newSections []section
 	for _, us := range updated {
-		key := strings.TrimRight(us.heading, "\n")
-		if us.heading != "" && !origHeadings[key] {
+		key := headingKey(us.heading)
+		if key == "" {
+			continue // preamble noise from the model is never merged
+		}
+		if !origHeadings[key] {
 			if !seenNew[key] {
 				seenNew[key] = true
 				newSections = append(newSections, us)
@@ -134,20 +140,15 @@ func MergeSectionUpdates(fullDoc string, updatedSections string) string {
 		replacements[key] = us.content
 	}
 
-	// Reconstruct the full document, replacing matching sections.
 	var result strings.Builder
 	for _, os := range origSections {
-		key := strings.TrimRight(os.heading, "\n")
-		if newContent, ok := replacements[key]; ok {
-			result.WriteString(os.heading)
+		result.WriteString(os.heading)
+		if newContent, ok := replacements[headingKey(os.heading)]; ok && os.heading != "" {
 			result.WriteString(newContent)
 		} else {
-			result.WriteString(os.heading)
 			result.WriteString(os.content)
 		}
 	}
-
-	// Append genuinely new sections at the end.
 	for _, ns := range newSections {
 		if !strings.HasSuffix(result.String(), "\n") {
 			result.WriteString("\n")
@@ -156,6 +157,14 @@ func MergeSectionUpdates(fullDoc string, updatedSections string) string {
 		result.WriteString(ns.content)
 	}
 	return result.String()
+}
+
+// headingKey normalizes a heading line for matching: surrounding whitespace is
+// insignificant. LLMs frequently emit an otherwise-identical heading with a
+// trailing space, which previously defeated both replacement matching and
+// new-section deduplication (observed as a duplicated section in E2E).
+func headingKey(heading string) string {
+	return strings.TrimSpace(heading)
 }
 
 // countHeadingLevel returns the number of '#' characters at the beginning of the heading line.
@@ -170,6 +179,30 @@ func countHeadingLevel(heading string) int {
 		}
 	}
 	return level
+}
+
+// splitIntoLeafSections splits md into NON-overlapping segments: each
+// section's content ends at the next heading of ANY level. Unlike
+// splitIntoSections (hierarchical, used for extraction), reassembling these
+// segments reproduces the document exactly — including any preamble before
+// the first heading, which the hierarchical split drops.
+func splitIntoLeafSections(md string) []section {
+	matches := headingRE.FindAllStringSubmatchIndex(md, -1)
+	if len(matches) == 0 {
+		return []section{{heading: "", content: md}}
+	}
+	var secs []section
+	if matches[0][0] > 0 {
+		secs = append(secs, section{heading: "", content: md[:matches[0][0]]})
+	}
+	for i, m := range matches {
+		end := len(md)
+		if i+1 < len(matches) {
+			end = matches[i+1][0]
+		}
+		secs = append(secs, section{heading: md[m[0]:m[1]], content: md[m[1]:end]})
+	}
+	return secs
 }
 
 type section struct {
