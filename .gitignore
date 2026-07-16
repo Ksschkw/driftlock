@@ -13,3 +13,4 @@ logs/
 *.log-*
 .kosi.toml
 *E.md
+past/
