@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Driftlock — demo</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; background:#000; overflow:hidden;
+    font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace; }
+
+  /* stage holds the artifact (left) + terminal (center) */
+  #stage { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; gap:34px; padding:4vh 3vw 12vh; }
+
+  /* ---- LEFT ARTIFACT: ASCII status monitor ---- */
+  #art {
+    width:min(24vw, 300px); align-self:center; color:#3f5165;
+    font-size:clamp(9px,1.05vw,13px); line-height:1.28; white-space:pre;
+    opacity:0; transform:translateX(-16px); transition:opacity .6s, transform .6s;
+    user-select:none;
+  }
+  #art.show { opacity:1; transform:translateX(0); }
+  #art .lockline { color:#7f8a99; }
+  #art .st-lock { color:#ff5f66; }
+  #art .st-open { color:#4fd66f; }
+  #art .hud b { color:#aeb6c2; font-weight:600; }
+  #art .val { color:#cfd8e3; }
+  #art .barwrap { color:#2a3442; }
+  #art .bar { color:#4fd66f; }
+
+  /* ---- TERMINAL ---- */
+  #term {
+    width:min(70vw, 1000px); height:min(76vh, 660px);
+    background:#000; border-radius:9px; overflow:hidden;
+    box-shadow:0 22px 70px rgba(0,0,0,.7), 0 0 0 1px #14181f;
+    display:flex; flex-direction:column;
+    transition:transform .55s cubic-bezier(.22,1,.36,1), opacity .5s, filter .5s;
+  }
+  #bar {
+    height:38px; background:#111418; display:flex; align-items:center; padding:0 12px; gap:8px;
+    flex:0 0 auto; border-bottom:1px solid #1b2028;
+  }
+  #bar .ico { color:#5a9cff; font-weight:700; font-size:14px; width:34px; }
+  #bar .title { flex:1; text-align:center; color:#8a95a3; font-size:13px; font-weight:600; }
+  #bar .btns { display:flex; gap:7px; }
+  #bar .btns i { width:13px; height:13px; border-radius:4px; background:#2b313b; }
+  #bar .btns i.c { background:#b6432f; }
+
+  #bodywrap { flex:1; position:relative; overflow:hidden; }
+  #body {
+    position:absolute; inset:0; padding:16px 18px;
+    font-size:clamp(13px,1.5vw,18px); line-height:1.55; color:#d6dce6;
+    white-space:pre-wrap; word-break:break-word;
+  }
+  #body .l { display:block; }
+  .cur { display:inline-block; width:9px; height:1.05em; background:#cfe4ff; vertical-align:-2px; margin-left:1px;
+    animation:blink 1.05s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+
+  /* bash prompt + syntax colors (no neon, calm palette) */
+  .u{color:#4fd66f;font-weight:600;} .p{color:#5a9cff;font-weight:600;} .s{color:#8a95a3;}
+  .cmd{color:#f0f3f7;} .g{color:#4fd66f;} .r{color:#ff5f66;} .y{color:#e6c169;}
+  .b{color:#5a9cff;} .d{color:#6b7686;} .m{color:#b98cff;} .w{color:#eef2f7;} .c{color:#3fb6c4;}
+
+  /* ---- BOTTOM CAPTION (never over the terminal) ---- */
+  #cap {
+    position:fixed; left:0; right:0; bottom:0; z-index:20; pointer-events:none;
+    padding:18px 6vw 22px; background:linear-gradient(0deg, rgba(0,0,0,.92), rgba(0,0,0,0));
+    text-align:center; opacity:0; transform:translateY(10px); transition:opacity .45s, transform .45s;
+  }
+  #cap.show { opacity:1; transform:translateY(0); }
+  #cap .k { display:inline-block; font-size:11px; letter-spacing:3px; font-weight:700; color:#000; background:#5a9cff;
+    padding:3px 9px; border-radius:3px; margin-bottom:9px; }
+  #cap .t { font:500 clamp(15px,2.1vw,24px)/1.4 ui-sans-serif,system-ui,"Segoe UI",sans-serif; color:#e6ebf2; max-width:900px; margin:0 auto; }
+  #cap .sub { font:400 clamp(11px,1.3vw,14px)/1.5 ui-sans-serif,system-ui,sans-serif; color:#7f8a99; margin-top:6px; }
+
+  #logo { position:fixed; left:18px; top:14px; z-index:20; color:#4a5666; font-size:13px; font-weight:600; letter-spacing:.4px; }
+  #logo b{ color:#5a9cff; }
+  #stepc { position:fixed; right:18px; top:14px; z-index:20; color:#33414f; font-size:12px; letter-spacing:1px; }
+
+  #start { position:fixed; inset:0; z-index:50; background:#000; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; transition:opacity .5s; }
+  #start h1 { font:800 clamp(44px,10vw,120px) ui-monospace,monospace; letter-spacing:3px; color:#eef2f7; }
+  #start h1 b { color:#5a9cff; }
+  #start p { color:#7f8a99; font-size:13px; letter-spacing:4px; }
+  #start .go { margin-top:8px; color:#000; background:#4fd66f; padding:11px 24px; border-radius:8px; font-weight:700; letter-spacing:1px; }
+  #start.hide { opacity:0; pointer-events:none; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <pre id="art"></pre>
+    <div id="term">
+      <div id="bar">
+        <span class="ico">&gt;_</span>
+        <span class="title">ksschkw@driftlock-demo</span>
+        <span class="btns"><i></i><i></i><i class="c"></i></span>
+      </div>
+      <div id="bodywrap"><div id="body"></div></div>
+    </div>
+  </div>
+
+  <div id="cap"><span class="k"></span><div class="t"></div><div class="sub"></div></div>
+  <div id="logo"><b>driftlock</b> · docs that can't drift</div>
+  <div id="stepc"></div>
+
+  <div id="start">
+    <p>A PRODUCT TOUR</p>
+    <h1>DRIFT<b>LOCK</b></h1>
+    <p>GIT DOCS THAT CAN'T DRIFT · V0.3.0</p>
+    <div class="go">▶ CLICK TO PLAY</div>
+  </div>
+
+<script>
+// ============================================================================
+// Sharp DOM terminal demo. Black bg, no neon. Left ASCII artifact HUD.
+// Captions at bottom. Detailed, slow narration. Go used in examples.
+// Hidden controls: → next · ← prev · Space pause · +/- speed.
+// ============================================================================
+const body=document.getElementById('body');
+const barTitle=document.querySelector('#bar .title');
+const term=document.getElementById('term');
+const cap=document.getElementById('cap'), capK=cap.querySelector('.k'), capT=cap.querySelector('.t'), capS=cap.querySelector('.sub');
+const stepc=document.getElementById('stepc');
+const art=document.getElementById('art');
+
+let SPEED=1, paused=false, jump=null, curChapter=0;
+
+const sleep=ms=>new Promise(res=>{ const t0=performance.now();
+  (function w(now){ if(jump!==null)return res(); if(paused){requestAnimationFrame(w);return;}
+    if(now-t0>=ms/SPEED)return res(); requestAnimationFrame(w); })(t0); });
+
+// ---- terminal buffer ----
+let lines=[];
+function render(){ let h=''; for(const ln of lines) h+='<span class="l">'+ln+'</span>'; body.innerHTML=h; }
+function fit(){ const lh=parseFloat(getComputedStyle(body).lineHeight); const max=Math.floor((body.clientHeight-14)/lh);
+  if(lines.length>max) lines=lines.slice(lines.length-max); }
+function push(html){ lines.push(html); fit(); render(); }
+function out(t,c='w'){ push('<span class="'+c+'">'+esc(t)+'</span>'); }
+function blank(){ push('&nbsp;'); }
+function clearTerm(){ lines=[]; render(); }
+function setTitle(t){ barTitle.textContent=t; }
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const PROMPT='<span class="u">ksschkw</span><span class="s">:</span><span class="p">~/driftlock-demo</span><span class="s">$</span> ';
+
+async function typeCmd(text, sp=42){
+  const i=lines.push(PROMPT)-1; render();
+  for(let k=0;k<=text.length;k++){ lines[i]=PROMPT+'<span class="cmd">'+esc(text.slice(0,k))+'</span><span class="cur"></span>';
+    render(); if(jump!==null)return; await sleep(sp); }
+  lines[i]=PROMPT+'<span class="cmd">'+esc(text)+'</span>'; render();
+}
+async function typeLine(text, cls='w', sp=26){
+  const i=lines.push('')-1; render();
+  for(let k=0;k<=text.length;k++){ lines[i]='<span class="'+cls+'">'+esc(text.slice(0,k))+'</span><span class="cur"></span>';
+    render(); if(jump!==null)return; await sleep(sp); }
+  lines[i]='<span class="'+cls+'">'+esc(text)+'</span>'; render();
+}
+// LLM "thinking" spinner line, resolves to a final line
+async function spinner(label, ms, finalText, finalCls){
+  const frames=['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']; const i=lines.push('')-1; render();
+  const t0=performance.now(); let f=0;
+  while(performance.now()-t0<ms){ if(jump!==null)return; if(!paused){ lines[i]='<span class="y">'+frames[f++%frames.length]+'</span> <span class="d">'+esc(label)+'</span>'; render(); }
+    await sleep(90); }
+  lines[i]='<span class="'+(finalCls||'g')+'">'+esc(finalText)+'</span>'; render();
+}
+
+// ---- captions ----
+function caption(k,t,sub=''){ capK.textContent=k; capT.textContent=t; capS.textContent=sub; cap.classList.add('show'); }
+function capHide(){ cap.classList.remove('show'); }
+
+// ---- transitions ----
+async function slideSwap(fn){ // slide terminal out, run fn (rebuild), slide in
+  term.style.transform='translateX(-24px) scale(.985)'; term.style.opacity='0'; await sleep(360);
+  fn && fn(); await sleep(40);
+  term.style.transform='translateX(0) scale(1)'; term.style.opacity='1'; await sleep(360);
+}
+async function zoomPunch(scale=1.03){ term.style.transform='scale('+scale+')'; await sleep(240); term.style.transform='scale(1)'; await sleep(160); }
+async function shake(){ for(let i=0;i<5;i++){ term.style.transform='translateX('+(i%2?-5:5)+'px)'; await sleep(45);} term.style.transform='translateX(0)'; }
+
+// ============================================================================
+// LEFT ARTIFACT — ASCII status monitor with a lock + live HUD
+// ============================================================================
+const ARTP={ locked:false, model:'deepseek-r1:1.5b)', driver:'ollama', checks:0, cached:0, drift:'—', cov:0, spin:0 };
+const LOCK_SHUT=[
+'      .----.      ',
+'     / .--. \\     ',
+'     | |  | |     ',
+'    .-\'    \'-.    ',
+'   / .------. \\   ',
+'   | |  ##  | |   ',
+'   | |  ||  | |   ',
+'   | \'------\' |   ',
+'   \'----------\'   '];
+const LOCK_OPEN=[
+'      .----.      ',
+'     / .--. \\     ',
+'     | |  | |     ',
+'     \'-.  | |     ',
+'   .-----\'| |     ',
+'   | |  ##  |      ',
+'   | |  ||  |      ',
+'   | \'------\'|     ',
+'   \'----------\'   '];
+const spinFrames=['◜','◝','◞','◟'];
+function drawArt(){
+  const L=ARTP.locked?LOCK_SHUT:LOCK_OPEN;
+  const lockCls=ARTP.locked?'st-lock':'st-open';
+  const stTxt=ARTP.locked?'● COMMIT LOCKED':'● COMMIT CLEAR';
+  const covN=Math.round(ARTP.cov);
+  const filled=Math.round(covN/10);
+  const barStr='['+'█'.repeat(filled)+'░'.repeat(10-filled)+']';
+  let s='';
+  s+='<span class="lockline">  driftlock // monitor</span>\n';
+  s+='<span class="lockline">  ──────────────────</span>\n\n';
+  s+='<span class="'+lockCls+'">'+L.join('\n')+'</span>\n\n';
+  s+='  <span class="'+lockCls+'">'+stTxt+'</span>  <span class="d">'+spinFrames[ARTP.spin%4]+'</span>\n\n';
+  s+='  <span class="hud"><b>driver</b>  <span class="val">'+ARTP.driver+'</span></span>\n';
+  s+='  <span class="hud"><b>model </b>  <span class="val">'+ARTP.model+'</span></span>\n';
+  s+='  <span class="hud"><b>checks</b>  <span class="val">'+ARTP.checks+'</span> <span class="d">('+ARTP.cached+' cached)</span></span>\n';
+  s+='  <span class="hud"><b>drift </b>  <span class="val">'+ARTP.drift+'</span></span>\n\n';
+  s+='  <span class="hud"><b>docs synced</b></span>\n';
+  s+='  <span class="barwrap">'+barStr.replace(/█+/,m=>'<span class="bar">'+m+'</span>')+'</span> <span class="val">'+covN+'%</span>\n';
+  art.innerHTML=s;
+}
+setInterval(()=>{ ARTP.spin++; drawArt(); }, 220);
+async function artCov(to, ms=900){ const from=ARTP.cov,t0=performance.now();
+  return new Promise(r=>{ (function s(n){ if(paused){requestAnimationFrame(s);return;} let t=Math.min((n-t0)/ms,1);
+    ARTP.cov=from+(to-from)*(t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2); drawArt(); if(t<1)requestAnimationFrame(s); else r(); })(t0); }); }
+
+// ============================================================================
+// CHAPTERS — detailed, paced. Go used for code. Explains the WHY.
+// ============================================================================
+const chapters=[
+
+// 0 — the problem
+async()=>{
+  caption('THE PROBLEM','Docs rot the moment code changes.',
+    'You rename a param, tweak a return type — and every README, doc comment and guide quietly goes stale. Nobody notices until a teammate does.');
+  art.classList.add('show'); drawArt();
+  clearTerm(); setTitle('ksschkw@driftlock-demo');
+  await typeCmd('git log --oneline -3', 46);
+  await sleep(300);
+  out('a91c2f4  refactor api signatures','d'); await sleep(220);
+  out('7d3e8b1  fix pagination','d'); await sleep(220);
+  out('2b90aa0  update user model','d'); await sleep(600);
+  out('# which of these silently broke the docs? nobody knows.','d');
+  await sleep(2600);
+},
+
+// 1 — what driftlock is
+async()=>{
+  caption('THE FIX · DRIFTLOCK','A git pre-commit hook that refuses to let docs drift.',
+    'It parses the structural API of your code — function and type signatures — in ANY language, and blocks the commit if the docs no longer match.');
+  await slideSwap(()=>{ clearTerm(); setTitle('ksschkw@driftlock-demo'); });
+  await typeCmd('driftlock --help', 40);
+  await sleep(300);
+  out('Driftlock — keep docs in sync with structural code changes.','w');
+  blank();
+  out('Commands:','d');
+  out('  init      set up config, install the hook, update .gitignore','d'); await sleep(180);
+  out('  check     dry-run a drift check (CI: --base/--head/--json)','d'); await sleep(180);
+  out('  fix       rewrite docs from the current code','d'); await sleep(180);
+  out('  status    documentation coverage across the repo','d'); await sleep(180);
+  out('  log       recent audit hashes','d');
+  await sleep(2400);
+},
+
+// 2 — init, explained
+async()=>{
+  caption('STEP 1 · INIT','One command wires up the whole repo.',
+    'It writes .driftlock.toml, installs .git/hooks/pre-commit, and adds .env + .driftlock/ to .gitignore. Interactive — press enter for sane defaults.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('driftlock init');
+  await sleep(400);
+  out('  Driftlock interactive setup','b'); await sleep(300);
+  out('  Source file patterns   [src/**] › ','w'); await sleep(500);
+  await typeLine('cmd/** internal/**','c',30);
+  out('  Docs (files or dirs)   [README.md docs/] › ','w'); await sleep(400);
+  await typeLine('README.md docs/','c',30);
+  out('  LLM driver             [ollama] › ','w'); await sleep(400);
+  await typeLine('groq','c',40);
+  out('  API key                › gsk_••••••••••••••••','y'); await sleep(600);
+  out('  ↳ that key is a secret. Storing it in .env instead of the config…','d'); await sleep(700);
+  out('  ✓ wrote key to .env  (gitignored)','g'); await sleep(220);
+  out('  ✓ config now reads api_key = "${DRIFTLOCK_API_KEY}"','g'); await sleep(500);
+  blank();
+  out('  ✓ .driftlock.toml written','g'); await sleep(200);
+  out('  ✓ pre-commit hook installed at .git/hooks/pre-commit','g'); await sleep(200);
+  out('  ✓ .env and .driftlock/ added to .gitignore','g');
+  ARTP.driver='groq'; ARTP.model='gpt-oss-20b'; drawArt();
+  await sleep(2600);
+},
+
+// 3 — the config, field by field
+async()=>{
+  caption('THE CONFIG','.driftlock.toml — map source globs to the docs that describe them.',
+    'doc_mapping is the heart of it: “these source files are documented by these markdown files.” If a change maps to nothing, the hook stays silent.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('cat .driftlock.toml', 34);
+  await sleep(300);
+  out('[[doc_mapping]]','m'); await sleep(150);
+  out('  sources = ["cmd/**", "internal/**"]   ','w'); await sleep(120);
+  out('  docs    = ["README.md", "docs/"]','w'); await sleep(500);
+  blank();
+  out('[llm]','m'); await sleep(120);
+  out('  driver  = "groq"       # ollama · groq · openrouter · deepseek · vllm','b'); await sleep(120);
+  out('  model   = "openai/gpt-oss-20b"','w'); await sleep(120);
+  out('  api_key = "${DRIFTLOCK_API_KEY}"   # resolved from .env','g'); await sleep(500);
+  blank();
+  out('[behavior]','m'); await sleep(120);
+  out('  auto_fix       = true   # rewrite docs when they drift','y'); await sleep(150);
+  out('  block_on_false = true   # a bad commit never lands','y'); await sleep(150);
+  out('  cache          = true   # never pay for the same check twice','y');
+  await sleep(2600);
+},
+
+// 4 — structural diffing, the key idea
+async()=>{
+  caption('THE KEY IDEA','It only reacts to STRUCTURAL change.',
+    'Rename a variable inside a function body? Silence. Change a signature, add a param, alter a return type, add/remove a function? That is API drift — and it fires.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('git diff internal/user/user.go', 34);
+  await sleep(400);
+  out('  func GetUser(id string) (*User, error) {','d'); await sleep(300);
+  out('-     return db.Find(id)','r'); await sleep(200);
+  out('+     return db.FindWithCache(id)','g'); await sleep(500);
+  out('  }','d'); await sleep(500);
+  out('# body-only change → signature identical → driftlock: silent','d');
+  await sleep(1800);
+  // now a structural one
+  out('','w');
+  await typeCmd('git diff internal/user/user.go   # later', 30);
+  await sleep(300);
+  out('- func GetUser(id string) (*User, error)','r'); await sleep(300);
+  out('+ func GetUser(id string, opts *Opts) (*User, error)','g'); await sleep(400);
+  out('  ↳ signature changed → this WILL trigger a doc check','y');
+  await sleep(2400);
+},
+
+// 5 — BLOCK, with the lock reacting
+async()=>{
+  caption('COMMIT BLOCKED','The hook runs on git commit and stops it cold.',
+    'HEAD vs staged content is parsed, signatures are diffed by name, the mapped docs are checked. block_on_false = true → exit 1 → the commit never happens.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('git commit -m "feat: GetUser takes options"');
+  await sleep(500);
+  out('driftlock: analysing 1 changed source file…','d'); await sleep(600);
+  out('driftlock: internal/user/user.go → 1 modified signature','d'); await sleep(600);
+  await spinner('asking '+ARTP.model+' to audit docs/users.md …', 2200, 'driftlock: docs/users.md → OUTDATED', 'r');
+  ARTP.checks++; ARTP.drift='YES'; drawArt();
+  out('  reason: docs still show GetUser(id) — missing the new opts param','r'); await sleep(600);
+  ARTP.locked=true; drawArt();
+  await shake();
+  out('Commit blocked: documentation out of sync.','r');
+  await zoomPunch(1.03);
+  await artCov(40,700);
+  await sleep(2600);
+},
+
+// 6 — AUTO-FIX, explained
+async()=>{
+  caption('STEP 2 · AUTO-FIX','It rewrites the doc for you — surgically.',
+    'Only the sections that mention the changed symbols are sent to the LLM (cheap). Headings are preserved so the fix stitches back exactly. Nothing accurate is deleted.');
+  await sleep(300);
+  await spinner('rewriting docs/users.md (chunked: 1 section, 340 tokens) …', 2600, 'driftlock: docs/users.md updated', 'y');
+  out('  + documents the new opts *Opts parameter','g'); await sleep(220);
+  out('  + notes default behaviour when opts is nil','g'); await sleep(220);
+  out('  = every still-correct line left untouched','g'); await sleep(220);
+  out('  ✓ heading "## GetUser" preserved → merged back cleanly','g');
+  await sleep(2600);
+},
+
+// 7 — PASS
+async()=>{
+  caption('STEP 3 · IT PASSES','Review the fix, stage it, commit again — green.',
+    'The re-run hits the cache for everything unchanged and only re-checks the doc you just edited. It matches. The commit lands.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('git add docs/users.md');
+  await typeCmd('git commit -m "feat: GetUser takes options"');
+  await sleep(500);
+  await spinner('re-checking docs/users.md …', 1500, 'driftlock: docs/users.md → up to date', 'g');
+  ARTP.checks++; ARTP.drift='none'; ARTP.locked=false; drawArt();
+  out('driftlock: all documentation matches the current API.','g');
+  await artCov(100,900);
+  out('[main 4c1e9a7] feat: GetUser takes options','d');
+  await zoomPunch(1.02);
+  await sleep(2600);
+},
+
+// 8 — caching
+async()=>{
+  caption('ECONOMICS · CACHE','You never pay for the same check twice.',
+    'Each verdict is content-addressed by model + prompt + diff + doc. Amend, rebase, re-run CI a hundred times — identical checks return instantly, no LLM call.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('git commit --amend --no-edit   # same content');
+  await sleep(400);
+  out('driftlock: docs/users.md → up to date  (cache hit)','g');
+  ARTP.cached++; ARTP.checks++; drawArt();
+  out('  ↳ 0 tokens spent · verdict served from .driftlock/cache.json','d');
+  await sleep(2400);
+},
+
+// 9 — providers
+async()=>{
+  caption('ANY LLM · LOCAL OR HOSTED','One adapter interface. Your model, your rules.',
+    'Run fully offline on Ollama, or point it at Groq, OpenRouter, DeepSeek, vLLM, or anything OpenAI-compatible. Reasoning models are handled — <think> blocks are stripped.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('driftlock check --driver ollama --model qwen2.5-coder', 26);
+  await sleep(400);
+  out('driftlock: using local Ollama at http://localhost:11434','b'); await sleep(400);
+  ARTP.driver='ollama'; ARTP.model='qwen2.5-coder'; drawArt();
+  await spinner('running fully offline — no API key, no network …', 2000, 'driftlock: docs/users.md → up to date', 'g');
+  out('  ↳ same result, zero cost, nothing left your machine','d');
+  await sleep(2400);
+},
+
+// 10 — teams
+async()=>{
+  caption('BUILT FOR TEAMS','Commit the policy. Keep the secret.',
+    'Because the key lives in .env, .driftlock.toml holds no secret — so you commit it. Every teammate and CI runner inherits the exact same doc-mapping, model and rules.');
+  await slideSwap(()=>{ clearTerm(); ARTP.driver='groq'; ARTP.model='gpt-oss-20b'; drawArt(); });
+  await typeCmd('git status', 34);
+  await sleep(300);
+  out('  committed:  .driftlock.toml   ← shared team policy','g'); await sleep(300);
+  out('  ignored:    .env              ← your key, never pushed','y'); await sleep(300);
+  out('  ignored:    .driftlock/       ← local cache + audit log','d');
+  await sleep(2400);
+},
+
+// 11 — CI
+async()=>{
+  caption('CI MODE','Guard the docs on every pull request.',
+    'check --base <ref> --head <ref> diffs a whole PR range instead of a commit. --json feeds your tooling; a non-zero exit fails the build. A GitHub Action ships in the box.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('driftlock check --base origin/main --head HEAD --json', 24);
+  await sleep(500);
+  out('{','b');
+  out('  "mode": "range",','b'); await sleep(150);
+  out('  "drift": true,','b'); await sleep(150);
+  out('  "results": [','b'); await sleep(150);
+  out('    { "doc": "docs/users.md", "status": "outdated" }','b'); await sleep(150);
+  out('  ]','b');
+  out('}','b'); await sleep(300);
+  out('exit 1   → the pull request check fails','r');
+  ARTP.locked=true; drawArt(); await shake(); ARTP.locked=false; drawArt();
+  await sleep(2400);
+},
+
+// 12 — audit
+async()=>{
+  caption('TAMPER-EVIDENT AUDIT','Proof that the docs were checked.',
+    'Every check appends a SHA-256 of (diff + doc) to a local audit log — a verifiable trail of what was reviewed and when. Optionally anchor each hash on Solana devnet.');
+  await slideSwap(()=>clearTerm());
+  await typeCmd('driftlock log', 36);
+  await sleep(400);
+  out('  4f2a…c9   docs/users.md   ✓   2026-07-16 10:22','d'); await sleep(200);
+  out('  8b1e…07   docs/users.md   ✗   2026-07-16 10:21','d'); await sleep(200);
+  out('  a390…5d   README.md       ✓   2026-07-16 09:58','d'); await sleep(400);
+  out('  ↳ anchor on-chain:  audit.solana = true','m');
+  await sleep(2400);
+},
+
+// 13 — outro
+async()=>{
+  caption('DRIFTLOCK · v0.3.0','Language-agnostic. Single binary. Open source.',
+    'github.com/Ksschkw/driftlock');
+  await slideSwap(()=>{ clearTerm(); setTitle('ksschkw@driftlock-demo'); });
+  await typeCmd('curl -fsSL https://raw.githubusercontent.com/Ksschkw/driftlock/main/install.sh | sh', 20);
+  await sleep(500);
+  out('  installing driftlock …','d'); await sleep(700);
+  out('  ✓ installed','g'); await sleep(300);
+  await typeCmd('cd your-repo && driftlock init');
+  await sleep(500);
+  out('  ✓ your docs can no longer drift.','g');
+  await artCov(100,600);
+  blank();
+  out('  ★  github.com/Ksschkw/driftlock','b');
+  await zoomPunch(1.02);
+  await sleep(3200);
+},
+];
+
+// ============================================================================
+// RUNNER
+// ============================================================================
+async function run(){
+  for(curChapter=0; curChapter<chapters.length; curChapter++){
+    stepc.textContent=String(curChapter+1).padStart(2,'0')+' / '+chapters.length;
+    try{ await chapters[curChapter](); }catch(e){ console.warn('ch',curChapter,e); }
+    if(jump!==null){ curChapter=jump-1; jump=null; }
+  }
+  capHide(); await sleep(500);
+  // reset artifact + loop
+  ARTP.locked=false; ARTP.checks=0; ARTP.cached=0; ARTP.drift='—'; ARTP.cov=0; drawArt();
+  curChapter=-1; run();
+}
+
+addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight') jump=Math.min(curChapter+1,chapters.length-1);
+  else if(e.key==='ArrowLeft') jump=Math.max(curChapter-1,0);
+  else if(e.key===' '){ e.preventDefault(); paused=!paused; }
+  else if(e.key==='+'||e.key==='=') SPEED=Math.min(SPEED*1.4,4);
+  else if(e.key==='-') SPEED=Math.max(SPEED/1.4,0.5);
+});
+
+drawArt();
+const start=document.getElementById('start');
+start.onclick=()=>{ start.classList.add('hide'); setTimeout(()=>start.remove(),500); run(); };
+</script>
+</body>
+</html>
