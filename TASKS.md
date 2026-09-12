@@ -179,7 +179,7 @@ exists to prevent. **This milestone is the highest priority.**
   a hung provider hangs `git commit` forever. Add a configurable timeout.
 - [x] **M2.D.2 — Per-run deadline.**
   Apply a context deadline to the whole run.
-- [ ] **M2.D.3 — Fail-open with a loud warning.**
+- [x] **M2.D.3 — Fail-open with a loud warning.**
   On timeout, respect `block_on_llm_error` but always print an actionable
   message.
 
@@ -346,3 +346,7 @@ deterministic string check does perfectly, instantly, and for free.
   dead context, interruptible backoff) and each document's check runs under a
   `perCheckBudget` deadline derived from the HTTP timeout and retry count.
   Tests: `internal/hook/retry_test.go`.
+- **M2.D.3** — The LLM-failure summary now names the affected docs, states
+  whether the commit proceeded UNCHECKED or was blocked, and gives remediation
+  (`block_on_llm_error`, `timeout_seconds`, `DRIFTLOCK_DEBUG`). Tests:
+  `internal/hook/message_test.go`.

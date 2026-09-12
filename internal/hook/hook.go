@@ -167,6 +167,7 @@ func RunWith(ctx context.Context, opts Options) error {
 	anyStructuralChanges := false
 	anyOutOfSync := false
 	anyLLMError := false
+	var llmFailedDocs []string
 
 	for docPath, sourceFiles := range docMap {
 		var allChanges []diff.StructuralChange
@@ -255,6 +256,7 @@ func RunWith(ctx context.Context, opts Options) error {
 
 		if result.err != nil {
 			anyLLMError = true
+			llmFailedDocs = append(llmFailedDocs, docPath)
 			dr.Status = "llm_error"
 			dr.Explanation = result.err.Error()
 			report.Results = append(report.Results, dr)
@@ -330,7 +332,7 @@ func RunWith(ctx context.Context, opts Options) error {
 	if opts.JSON {
 		printJSON(report)
 	} else {
-		printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError, cfg, dryRun)
+		printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError, llmFailedDocs, cfg, dryRun)
 	}
 
 	if err := verdictCache.Save(); err != nil && !opts.JSON {
@@ -358,6 +360,27 @@ func RunWith(ctx context.Context, opts Options) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// llmErrorMessage builds the operator-facing message for documents that could
+// not be checked. It always states whether the commit went through, because a
+// fail-open gate that is quiet is indistinguishable from a pass — the whole
+// point of block_on_llm_error=false is that the developer must know their
+// commit was NOT verified.
+func llmErrorMessage(failedDocs []string, blocked bool) string {
+	outcome := "The commit is proceeding UNCHECKED"
+	if blocked {
+		outcome = "The commit is blocked"
+	}
+	docs := "unknown"
+	if len(failedDocs) > 0 {
+		docs = strings.Join(failedDocs, ", ")
+	}
+	return fmt.Sprintf(
+		"driftlock: %d document(s) could not be checked because the LLM failed (%s). %s. "+
+			"Set block_on_llm_error = true to fail instead, raise timeout_seconds for a slow provider, "+
+			"or run with DRIFTLOCK_DEBUG=1 to see the provider error.",
+		len(failedDocs), docs, outcome)
 }
 
 // mergeFix applies the model's rewritten sections to the full document and
@@ -425,13 +448,13 @@ func resolveSources(opts Options, rangeMode bool) ([]string, func(string) string
 	return files, oldOf, newOf, nil
 }
 
-func printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError bool, cfg *config.Config, dryRun bool) {
+func printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError bool, failedDocs []string, cfg *config.Config, dryRun bool) {
 	if anyLLMError && !cfg.Behavior.BlockOnLLMError {
-		fmt.Fprint(os.Stderr, output.YellowStr("\ndriftlock: Some documentation checks could not be completed due to LLM errors. Review manually.\n"))
+		fmt.Fprint(os.Stderr, output.YellowStr("\n"+llmErrorMessage(failedDocs, false)+"\n"))
 		return // a check that errored must not also claim success
 	}
 	if anyLLMError && cfg.Behavior.BlockOnLLMError && !dryRun {
-		fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: LLM check failed and block_on_llm_error is enabled.\n"))
+		fmt.Fprint(os.Stderr, output.RedStr("\n"+llmErrorMessage(failedDocs, true)+"\n"))
 		return
 	}
 	if anyOutOfSync {
