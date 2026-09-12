@@ -6,6 +6,25 @@ import (
 	"strings"
 )
 
+// pattern pairs a compiled structural regex with the 1-based capture group
+// that holds the symbol name. Declaring the group explicitly replaces the old
+// heuristic ("group 1 is the name unless group 1 looks like a type keyword"),
+// which misread the SQL keyword TABLE as a table name, extracted `x` from
+// `def type(x)`, and turned `fn type(x: i32)` into a symbol named `x: i32`.
+type pattern struct {
+	re        *regexp.Regexp
+	nameGroup int
+	// scopeGroup, when non-zero, is the capture group holding the enclosing
+	// scope of the declaration (a Go receiver type or a Rust impl target).
+	// It is reserved for qualified naming; 0 means "no scope".
+	scopeGroup int
+}
+
+// pat builds a pattern whose symbol name lives in the given capture group.
+func pat(re *regexp.Regexp, nameGroup int) pattern {
+	return pattern{re: re, nameGroup: nameGroup}
+}
+
 // langSpec describes how to sanitize and pattern-match a single language (or
 // family of languages). Comment and string spans are blanked out before the
 // structural patterns run, which eliminates the vast majority of false
@@ -15,7 +34,7 @@ type langSpec struct {
 	lineComments []string    // e.g. "//", "#", "--"
 	blockComment [][2]string // e.g. {"/*", "*/"}
 	stringDelims []string    // e.g. "\"", "'", "`", "\"\"\""
-	patterns     []*regexp.Regexp
+	patterns     []pattern
 	// dataLike marks structured-data languages (YAML/JSON/TOML/XML/Markdown)
 	// whose "structure" lives in keys/tags/headings rather than code
 	// signatures. String/comment stripping is skipped for these because the
@@ -25,8 +44,8 @@ type langSpec struct {
 
 // ── Shared pattern groups ───────────────────────────────────────────────────
 // Patterns are scoped per language so that, for example, the YAML "key:"
-// pattern never runs against a Go file. Each pattern's first (or keyword+name)
-// capture group yields the symbol name; see extractNameAndFull.
+// pattern never runs against a Go file. Each pattern declares which capture
+// group holds the symbol name (see the pattern type and pat).
 
 // tsParamList matches a parenthesised parameter list for JS/TS-style
 // declarations. It forbids a top-level ';' so a declaration pattern can never
@@ -116,94 +135,94 @@ var registry = map[string]langSpec{
 	"go": {
 		name: "go", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"`", "\""},
-		patterns:     []*regexp.Regexp{pGoFunc, pGoType},
+		patterns:     []pattern{pat(pGoFunc, 1), pat(pGoType, 1)},
 	},
 	"python": {
 		name: "python", lineComments: []string{"#"},
 		stringDelims: []string{`"""`, "'''", "\"", "'"},
-		patterns:     []*regexp.Regexp{pPyDef, pPyClass},
+		patterns:     []pattern{pat(pPyDef, 1), pat(pPyClass, 1)},
 	},
 	"javascript": {
 		name: "javascript", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"`", "\"", "'"},
-		patterns:     []*regexp.Regexp{pFuncKw, pArrowFn, pTsType, pTsMethod, pTsBareMethod, pClassGroup},
+		patterns:     []pattern{pat(pFuncKw, 1), pat(pArrowFn, 1), pat(pTsType, 1), pat(pTsMethod, 1), pat(pTsBareMethod, 1), pat(pClassGroup, 2)},
 	},
 	"typescript": {
 		name: "typescript", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"`", "\"", "'"},
-		patterns:     []*regexp.Regexp{pFuncKw, pArrowFn, pTsType, pTsMethod, pTsBareMethod, pClassGroup},
+		patterns:     []pattern{pat(pFuncKw, 1), pat(pArrowFn, 1), pat(pTsType, 1), pat(pTsMethod, 1), pat(pTsBareMethod, 1), pat(pClassGroup, 2)},
 	},
 	"java": {
 		name: "java", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pJavaMethod, pClassGroup},
+		patterns:     []pattern{pat(pJavaMethod, 1), pat(pClassGroup, 2)},
 	},
 	"csharp": {
 		name: "csharp", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pJavaMethod, pClassGroup},
+		patterns:     []pattern{pat(pJavaMethod, 1), pat(pClassGroup, 2)},
 	},
 	"c": {
 		name: "c", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pCppTemplate, pCFunc, pClassGroup, pDefine},
+		patterns:     []pattern{pat(pCppTemplate, 1), pat(pCFunc, 1), pat(pClassGroup, 2), pat(pDefine, 1)},
 	},
 	"rust": {
 		name: "rust", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pRustFn, pRustType},
+		patterns:     []pattern{pat(pRustFn, 1), pat(pRustType, 2)},
 	},
 	"swift": {
 		name: "swift", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pSwiftFunc, pClassGroup},
+		patterns:     []pattern{pat(pSwiftFunc, 1), pat(pClassGroup, 2)},
 	},
 	"kotlin": {
 		name: "kotlin", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pKotlinFun, pClassGroup},
+		patterns:     []pattern{pat(pKotlinFun, 1), pat(pClassGroup, 2)},
 	},
 	"scala": {
 		name: "scala", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pScalaDef, pClassGroup},
+		patterns:     []pattern{pat(pScalaDef, 1), pat(pClassGroup, 2)},
 	},
 	"php": {
 		name: "php", lineComments: []string{"//", "#"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pPhpFunc, pClassGroup},
+		patterns:     []pattern{pat(pPhpFunc, 1), pat(pClassGroup, 2)},
 	},
 	"ruby": {
 		name: "ruby", lineComments: []string{"#"},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pRubyDef, pClassGroup},
+		patterns:     []pattern{pat(pRubyDef, 1), pat(pClassGroup, 2)},
 	},
 	"shell": {
 		name: "shell", lineComments: []string{"#"},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pShellFunc},
+		patterns:     []pattern{pat(pShellFunc, 1)},
 	},
 	"lua": {
 		name: "lua", lineComments: []string{"--"}, blockComment: [][2]string{{"--[[", "]]"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []*regexp.Regexp{pLuaFunc},
+		patterns:     []pattern{pat(pLuaFunc, 1)},
 	},
 	"clojure": {
 		name: "clojure", lineComments: []string{";"},
 		stringDelims: []string{"\""},
-		patterns:     []*regexp.Regexp{pDefn},
+		patterns:     []pattern{pat(pDefn, 1)},
 	},
 	"sql": {
 		name: "sql", lineComments: []string{"--"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"'"},
-		patterns:     []*regexp.Regexp{pSQL},
+		patterns:     []pattern{pat(pSQL, 2)},
 	},
-	"yaml":     {name: "yaml", dataLike: true, patterns: []*regexp.Regexp{pYAMLKey}},
-	"json":     {name: "json", dataLike: true, patterns: []*regexp.Regexp{pJSONKey}},
-	"toml":     {name: "toml", dataLike: true, patterns: []*regexp.Regexp{pINI, pYAMLKey}},
-	"ini":      {name: "ini", dataLike: true, patterns: []*regexp.Regexp{pINI, pYAMLKey}},
-	"xml":      {name: "xml", dataLike: true, patterns: []*regexp.Regexp{pXMLTag}},
-	"markdown": {name: "markdown", dataLike: true, patterns: []*regexp.Regexp{pMarkdown}},
+	"yaml":     {name: "yaml", dataLike: true, patterns: []pattern{pat(pYAMLKey, 1)}},
+	"json":     {name: "json", dataLike: true, patterns: []pattern{pat(pJSONKey, 1)}},
+	"toml":     {name: "toml", dataLike: true, patterns: []pattern{pat(pINI, 1), pat(pYAMLKey, 1)}},
+	"ini":      {name: "ini", dataLike: true, patterns: []pattern{pat(pINI, 1), pat(pYAMLKey, 1)}},
+	"xml":      {name: "xml", dataLike: true, patterns: []pattern{pat(pXMLTag, 1)}},
+	"markdown": {name: "markdown", dataLike: true, patterns: []pattern{pat(pMarkdown, 2)}},
 }
 
 // extByLang maps file extensions (without dot, lowercase) to a registry key.
@@ -262,10 +281,10 @@ var universalSpec = langSpec{
 	lineComments: []string{"//", "#", "--", ";"},
 	blockComment: [][2]string{{"/*", "*/"}},
 	stringDelims: []string{"`", "\"", "'"},
-	patterns: []*regexp.Regexp{
-		pGoFunc, pPyDef, pRustFn, pFuncKw, pArrowFn, pCFunc, pCppTemplate,
-		pSwiftFunc, pKotlinFun, pScalaDef, pPhpFunc, pShellFunc, pLuaFunc,
-		pDefn, pClassGroup, pGoType, pDefine,
+	patterns: []pattern{
+		pat(pGoFunc, 1), pat(pPyDef, 1), pat(pRustFn, 1), pat(pFuncKw, 1), pat(pArrowFn, 1), pat(pCFunc, 1), pat(pCppTemplate, 1),
+		pat(pSwiftFunc, 1), pat(pKotlinFun, 1), pat(pScalaDef, 1), pat(pPhpFunc, 1), pat(pShellFunc, 1), pat(pLuaFunc, 1),
+		pat(pDefn, 1), pat(pClassGroup, 2), pat(pGoType, 1), pat(pDefine, 1),
 	},
 }
 

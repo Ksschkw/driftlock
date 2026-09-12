@@ -20,11 +20,11 @@ func extractSignatures(filePath, source string) []Signature {
 	seen := make(map[string]bool)
 	var sigs []Signature
 
-	for _, re := range spec.patterns {
-		locs := re.FindAllStringSubmatchIndex(sanitized, -1)
+	for _, p := range spec.patterns {
+		locs := p.re.FindAllStringSubmatchIndex(sanitized, -1)
 		for _, loc := range locs {
 			match := submatchStrings(sanitized, loc)
-			name, _ := extractNameAndFull(match)
+			name := groupAt(match, p.nameGroup)
 			if name == "" || isIgnoredKeyword(name) {
 				continue
 			}
@@ -68,33 +68,15 @@ func submatchStrings(src string, loc []int) []string {
 	return out
 }
 
-// extractNameAndFull deduces the symbol name from regex capture groups.
-//
-// Patterns that capture a keyword (class/struct/…) plus an identifier put the
-// keyword in group 1 and the identifier in group 2. All other patterns put the
-// name in group 1.
-func extractNameAndFull(match []string) (string, string) {
-	if len(match) == 0 {
-		return "", ""
+// groupAt returns capture group n (1-based) from a FindStringSubmatch-style
+// slice, or "" when the group did not participate or does not exist. Patterns
+// declare their name group explicitly (see the pattern type and pat), so name
+// extraction never has to guess.
+func groupAt(match []string, n int) string {
+	if n <= 0 || n >= len(match) {
+		return ""
 	}
-	full := match[0]
-
-	if len(match) >= 3 && match[2] != "" && isTypeKeyword(match[1]) {
-		return match[2], full
-	}
-	if len(match) >= 2 && match[1] != "" {
-		return match[1], full
-	}
-	return "", full
-}
-
-func isTypeKeyword(s string) bool {
-	switch s {
-	case "class", "struct", "interface", "trait", "enum",
-		"object", "record", "module", "impl", "union", "type":
-		return true
-	}
-	return false
+	return match[n]
 }
 
 // isIgnoredKeyword filters control-flow and statement keywords that permissive

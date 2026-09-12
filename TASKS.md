@@ -58,35 +58,41 @@ exists to prevent. **This milestone is the highest priority.**
   *Accept:* unmodified methods, `get`/`set`, `async`, and `constructor` are
   extracted; `if (…) {`, `for (…) {`, `return foo(a);` are not.
 
-- [ ] **M1.A.4 — Java/C# methods without access modifiers (package-private).**
+- [x] **M1.A.4 — Explicit capture-group metadata for symbol names.**
+  Name extraction guessed: "group 1 is the name unless group 1 looks like a
+  type keyword". That made `CREATE TABLE users` a symbol named `TABLE`,
+  `def type(x)` a symbol named `x`, and `fn type(x: i32)` a symbol named
+  `x: i32`. Replace the guess with a declared name group per pattern.
+  *Accept:* SQL/Kotlin/Rust/Python/Markdown names are correct.
+- [ ] **M1.A.5 — Java/C# methods without access modifiers (package-private).**
   `int add(int a, int b) { … }` currently yields only the class. Add an
   optional-modifier pattern guarded so statement lines (`return foo(a);`,
   `obj.call(x);`) never match.
   *Accept:* package-private and interface methods are extracted; calls and
   `return` statements are not.
 
-- [ ] **M1.A.5 — Python return annotations.**
+- [ ] **M1.A.6 — Python return annotations.**
   `-> int` changing to `-> str` currently produces **zero** changes because
   the signature truncates at `)`. Include the return annotation.
   *Accept:* a return-annotation change produces one `modified` change.
 
-- [ ] **M1.A.6 — Python signatures must not truncate on brace/semicolon.**
+- [ ] **M1.A.7 — Python signatures must not truncate on brace/semicolon.**
   `def f(x: dict = {})` is currently cut to `def f(x: dict = ` because the
   brace/semicolon truncation is applied to every language. Make the truncation
   set language-specific.
   *Accept:* dict/set defaults and `lambda` defaults are preserved verbatim.
 
-- [ ] **M1.A.7 — Rust return types.**
+- [ ] **M1.A.8 — Rust return types.**
   `-> i32` changing to `-> String` currently produces **zero** changes. Include
   the return type (and tolerate `where` clauses).
   *Accept:* a Rust return-type change produces one `modified` change.
 
-- [ ] **M1.A.8 — Rust `impl` methods and generic impls.**
+- [ ] **M1.A.9 — Rust `impl` methods and generic impls.**
   Qualify methods declared inside `impl Type` blocks so same-named methods on
   different types are distinguishable, and accept `impl<T> Trait for Type`.
   *Accept:* two `impl` blocks with a same-named method yield two symbols.
 
-- [ ] **M1.A.9 — Kotlin / Swift / Scala return types.**
+- [ ] **M1.A.10 — Kotlin / Swift / Scala return types.**
   Include trailing `: Type` / `-> Type` return annotations in the signature
   where the language declares them inline.
   *Accept:* a return-type change produces one `modified` change per language.
@@ -286,3 +292,8 @@ deterministic string check does perfectly, instantly, and for free.
   `pTsMethod` modifier group repeatable, and introduced a `;`-free parameter
   list so a declaration can never bind to a later anonymous-function body.
   Tests: `internal/parser/typescript_test.go`.
+- **M1.A.4** — Explicit capture-group metadata (`pattern{re, nameGroup}`).
+  Fixed misnamed symbols in SQL (`TABLE`→`users`), Python/Rust/Kotlin
+  (`type` was read as its parameter list), Go methods named `object`, and
+  Markdown (every heading collapsed to `#`). Tests:
+  `internal/parser/names_test.go`.
