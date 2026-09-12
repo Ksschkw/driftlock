@@ -62,6 +62,30 @@ func (s *Stack[T]) Pop() (T, bool) {
 	}
 }
 
+// A generic type declaration (`type Stack[T any] struct`) was extracted as
+// nothing because the pattern required whitespace immediately after the name,
+// so the `[T any]` list between the name and the kind keyword broke the match.
+func TestGoGenericTypeDeclaration(t *testing.T) {
+	source := `package p
+
+type Stack[T any] struct {
+	items []T
+}
+
+type Set[T comparable] map[T]struct{}
+
+type Handler[T any, R any] interface {
+	Handle(T) (R, error)
+}
+`
+	sigs := parser.ExtractSignatures("types.go", source)
+	for _, want := range []string{"Stack", "Set", "Handler"} {
+		if _, ok := findBy(sigs, want); !ok {
+			t.Errorf("generic type %q not extracted; got %v", want, names(sigs))
+		}
+	}
+}
+
 // A func-typed parameter contains a ')' before the real end of the list. The
 // old non-greedy parameter match stopped at that inner paren and emitted a
 // truncated signature such as `func Apply(xs []int, f func(int`.

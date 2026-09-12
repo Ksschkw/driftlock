@@ -56,7 +56,8 @@ var (
 			`\((?:[^(){}]|\((?:[^(){}]*)\))*\)` +
 			`\s*(?:\([\s\S]*?\)|[\w\[\]\.\*&<> ,]+)?\s*\{?`)
 
-	pGoType = regexp.MustCompile(`(?m)^[\t ]*type\s+(\w+)\s+(struct|interface|func|map|\[|chan|\w)`)
+	// Go type declarations, including generic ones (`type Stack[T any] struct`).
+	pGoType = regexp.MustCompile(`(?m)^[\t ]*type\s+(\w+)(?:\s*\[[^\]]*\])?\s+(struct|interface|func|map|\[|chan|\w)`)
 
 	pPyDef   = regexp.MustCompile(`(?m)^[\t ]*(?:async\s+)?def\s+(\w+)\s*\(([\s\S]*?)\)`)
 	pPyClass = regexp.MustCompile(`(?m)^[\t ]*class\s+(\w+)`)

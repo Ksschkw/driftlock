@@ -45,7 +45,7 @@ exists to prevent. **This milestone is the highest priority.**
   *Accept:* generic funcs, generic methods, and generic receivers are extracted
   with name + full signature; non-generic Go output is byte-identical to before.
 
-- [ ] **M1.A.2 — Go generic type declarations.**
+- [x] **M1.A.2 — Go generic type declarations.**
   `type Stack[T any] struct` currently extracts nothing (`pGoType` requires
   whitespace immediately after the name). Accept an optional type-parameter
   list before the kind keyword.
@@ -278,3 +278,6 @@ deterministic string check does perfectly, instantly, and for free.
   tolerates one level of nested parentheses in parameters. This also fixed a
   pre-existing truncation of func-typed parameters. Tests:
   `internal/parser/go_test.go`.
+- **M1.A.2** — Go generic type declarations (`type Stack[T any] struct`,
+  `type Set[T comparable] map[T]struct{}`, generic interfaces). Test:
+  `TestGoGenericTypeDeclaration`.
