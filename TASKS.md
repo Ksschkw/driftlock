@@ -275,7 +275,7 @@ deterministic string check does perfectly, instantly, and for free.
 - [x] **M7.1 — dotenv inline comments.** `.env.example` ships `KEY=1 # note`,
   but the parser keeps the comment as part of the value, so copying it turns
   debug on permanently.
-- [ ] **M7.2 — Fix `.env.example`** to match the parser's real capabilities.
+- [x] **M7.2 — Fix `.env.example`** to match the parser's real capabilities.
 - [x] **M7.3 — Solana honesty.** `~` is never expanded in `keypair_path`, and
   `program_id` is documented but always errors. Implement or clearly mark
   unsupported.
@@ -284,10 +284,11 @@ deterministic string check does perfectly, instantly, and for free.
   docs index.
 - [x] **M7.5 — Build artifacts.** Document the release process; keep the tree
   free of ~75 MB of committed-by-accident binaries.
-- [ ] **M7.6 — License decision.** BUSL-1.1 with `Change Date: 2099-12-31` is
+- [!] **M7.6 — License decision.** BUSL-1.1 with `Change Date: 2099-12-31` is
   off-spec (BUSL caps at four years) and reads as "never open source", which is
-  a hard blocker for adoption of a per-repo developer tool. **Needs a
-  maintainer decision** — recorded here, not changed unilaterally.
+  a hard blocker for adoption of a per-repo developer tool. **BLOCKED ON A
+  MAINTAINER DECISION.** Recorded in `docs/licensing.md` with the options and a
+  recommendation; `LICENSE` itself is deliberately unchanged.
 
 ---
 
@@ -300,6 +301,16 @@ deterministic string check does perfectly, instantly, and for free.
 5. **M5** (architecture) — unlocks reliable testing and further work.
 6. **M6** (deterministic-first) — the cost/speed/trust differentiator.
 7. **M7** (housekeeping) — correctness details and docs.
+
+## Open decisions
+
+- **M7.6 (licence).** The repository ships BUSL-1.1 with `Change Date:
+  2099-12-31`. The change date is off-spec (BUSL caps at four years, and the
+  licence text itself says the fourth anniversary applies "whichever comes
+  first"), and the README's "non-commercial" wording does not match the
+  Additional Use Grant. `docs/licensing.md` lays out four options and a
+  recommendation. This is the only planned micro-milestone that cannot be
+  completed by an engineering change alone.
 
 ## Progress log
 
