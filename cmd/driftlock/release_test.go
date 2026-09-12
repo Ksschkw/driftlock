@@ -64,3 +64,21 @@ func TestInstallersRefuseMismatchedChecksums(t *testing.T) {
 		t.Errorf("install.ps1 has %d refusal(s), want one per checksum source", n)
 	}
 }
+
+// Build output must never be tracked. An earlier workflow built platform
+// binaries into the repository root, leaving ~78 MB of ignored-but-present
+// artifacts that were easy to commit by accident.
+func TestGitignoreCoversBuildArtifacts(t *testing.T) {
+	ignore := readRepoFile(t, ".gitignore")
+	for _, want := range []string{"dist/", "driftlock-*", "checksums.txt", "/driftlock"} {
+		found := false
+		for _, line := range strings.Split(ignore, "\n") {
+			if strings.TrimSpace(line) == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf(".gitignore does not ignore %q", want)
+		}
+	}
+}

@@ -282,7 +282,7 @@ deterministic string check does perfectly, instantly, and for free.
 - [x] **M7.4 — Docs sync.** Align README/docs with actual parser coverage
   (return types per language, multi-line generics) and add this roadmap to the
   docs index.
-- [ ] **M7.5 — Build artifacts.** Document the release process; keep the tree
+- [x] **M7.5 — Build artifacts.** Document the release process; keep the tree
   free of ~75 MB of committed-by-accident binaries.
 - [ ] **M7.6 — License decision.** BUSL-1.1 with `Change Date: 2099-12-31` is
   off-spec (BUSL caps at four years) and reads as "never open source", which is
@@ -519,3 +519,8 @@ deterministic string check does perfectly, instantly, and for free.
   Go generics/type expressions, visibility filtering, and the `report_unparsed`
   diagnostic. `docs/index.md` links this roadmap. Verifying the claim uncovered
   and fixed M1.A.14 (PHP return types).
+- **M7.5** — Removed the ~78 MB of stale platform binaries and `checksums.txt`
+  from the working tree (all were gitignored, none tracked), left `dist/` as the
+  documented build output, built a current `dist/driftlock` and verified
+  `driftlock version`. `TestGitignoreCoversBuildArtifacts` guards the ignore
+  rules. See `docs/releasing.md`.
