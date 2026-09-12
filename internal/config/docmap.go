@@ -8,8 +8,13 @@ import (
 
 // ResolveDocMapping takes the doc_mapping config, a list of staged files, and the project root,
 // and returns a map from documentation file path to the list of source files that map to it.
+//
+// A source is recorded at most once per document. Overlapping globs (e.g.
+// `src/**` and `src/*.go`) matched the same file repeatedly, which duplicated
+// its structural changes and its audit entries.
 func ResolveDocMapping(entries []DocMapEntry, stagedFiles []string, root string) (map[string][]string, error) {
 	docMap := make(map[string][]string)
+	seen := make(map[string]bool)
 	for _, entry := range entries {
 		for _, srcGlob := range entry.Sources {
 			for _, staged := range stagedFiles {
@@ -20,6 +25,11 @@ func ResolveDocMapping(entries []DocMapEntry, stagedFiles []string, root string)
 							return nil, err
 						}
 						for _, resolved := range resolvedDocs {
+							key := resolved + "\x00" + staged
+							if seen[key] {
+								continue
+							}
+							seen[key] = true
 							docMap[resolved] = append(docMap[resolved], staged)
 						}
 					}

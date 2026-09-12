@@ -159,7 +159,7 @@ exists to prevent. **This milestone is the highest priority.**
   entry point.
   *Accept:* `DRIFTLOCK_SKIP=true` in `.env` bypasses the hook.
 
-- [ ] **M2.B.2 — Deduplicate mapped source files.**
+- [x] **M2.B.2 — Deduplicate mapped source files.**
   Overlapping globs push the same source into a doc's list repeatedly, which
   duplicates diff lines and audit entries.
   *Accept:* each source appears once per doc.
@@ -333,3 +333,6 @@ deterministic string check does perfectly, instantly, and for free.
   Added root-aware `git.GetStagedFileContentAt` / `GetFileContentAtRefAt` so
   git runs at the project root rather than the process CWD. Tests:
   `internal/hook/docread_test.go`.
+- **M2.B.2** — `ResolveDocMapping` records each source at most once per
+  document, so overlapping globs no longer duplicate diff lines or audit
+  entries. Tests: `internal/config/docmap_test.go`.
