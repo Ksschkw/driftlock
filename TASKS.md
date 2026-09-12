@@ -208,7 +208,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 - [x] **M3.1 — Honor `core.hooksPath`.** Write the hook where git actually
   looks, not blindly to `.git/hooks/`.
-- [ ] **M3.2 — Chain an existing pre-commit hook.** Append the Driftlock call
+- [x] **M3.2 — Chain an existing pre-commit hook.** Append the Driftlock call
   to a foreign hook (husky, lint-staged, pre-commit) instead of overwriting it.
 - [ ] **M3.3 — Back up before modifying.** Preserve the original as
   `pre-commit.driftlock-backup` with a printed note.
@@ -410,3 +410,7 @@ deterministic string check does perfectly, instantly, and for free.
 - **M3.1** — `hooksDir` resolves git's `core.hooksPath` (relative to the root,
   or absolute) and falls back to `.git/hooks`. Tests:
   `cmd/driftlock/hooksdir_test.go`.
+- **M3.2** — `installPreCommitHook` never overwrites a foreign hook: a fresh
+  repo gets a standalone `exec` hook, an existing hook gets a guarded Driftlock
+  block appended (no `exec`, so the rest of the hook still runs). Tests:
+  `cmd/driftlock/install_test.go`.

@@ -63,18 +63,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
-	// Install pre-commit hook.
-	hooksPath, err := hooksDir(root)
+	// Install the pre-commit hook without disturbing any existing one.
+	hookNotes, err := installPreCommitHook(root)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(hooksPath, 0o755); err != nil {
-		return fmt.Errorf("failed to create hooks directory: %w", err)
-	}
-	hookPath := filepath.Join(hooksPath, "pre-commit")
-	hookContent := "#!/bin/sh\n# Driftlock pre-commit hook\nexec driftlock hook-run\n"
-	if err := os.WriteFile(hookPath, []byte(hookContent), 0o755); err != nil {
-		return fmt.Errorf("failed to write hook script: %w", err)
+	for _, note := range hookNotes {
+		fmt.Println(note)
 	}
 
 	// Update .gitignore. Always ignore local state (.driftlock/) and secrets
@@ -96,6 +91,73 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(".driftlock/ are gitignored.")
 	}
 	return nil
+}
+
+// Markers around the snippet Driftlock owns, so a later run can recognize its
+// own work and leave the rest of the file alone.
+const (
+	driftlockHookBegin = "# driftlock:begin"
+	driftlockHookEnd   = "# driftlock:end"
+)
+
+// installPreCommitHook installs Driftlock's pre-commit hook and returns notes
+// describing what it did.
+//
+// It NEVER overwrites an existing hook. A repository may already run husky,
+// lint-staged, the pre-commit framework, or a hand-written script; clobbering
+// those destroys a working setup. When a foreign hook is present, Driftlock's
+// snippet is appended to it so both run.
+func installPreCommitHook(root string) ([]string, error) {
+	dir, err := hooksDir(root)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("failed to create hooks directory: %w", err)
+	}
+	hookPath := filepath.Join(dir, "pre-commit")
+
+	existing, err := os.ReadFile(hookPath)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to read existing hook: %w", err)
+	}
+
+	if len(existing) == 0 {
+		if err := os.WriteFile(hookPath, []byte(freshHookScript()), 0o755); err != nil {
+			return nil, fmt.Errorf("failed to write hook script: %w", err)
+		}
+		return []string{"Installed the pre-commit hook at " + hookPath}, nil
+	}
+
+	content := string(existing)
+	if !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+	content += chainedHookBlock()
+	if err := os.WriteFile(hookPath, []byte(content), 0o755); err != nil {
+		return nil, fmt.Errorf("failed to write hook script: %w", err)
+	}
+	return []string{"Appended Driftlock to the existing pre-commit hook at " + hookPath}, nil
+}
+
+// freshHookScript is written only when no pre-commit hook exists. It uses exec
+// so a failure to find the binary is loud rather than silent.
+func freshHookScript() string {
+	return "#!/bin/sh\n# Driftlock pre-commit hook\n" +
+		driftlockHookBegin + "\n" +
+		"exec driftlock hook-run\n" +
+		driftlockHookEnd + "\n"
+}
+
+// chainedHookBlock is appended to a hook Driftlock does not own. It does not
+// use exec (which would replace the shell and skip anything after it) and is
+// guarded by a PATH check so a missing binary does not break unrelated commits.
+func chainedHookBlock() string {
+	return driftlockHookBegin + "\n" +
+		"if command -v driftlock >/dev/null 2>&1; then\n" +
+		"  driftlock hook-run || exit 1\n" +
+		"fi\n" +
+		driftlockHookEnd + "\n"
 }
 
 // hooksDir returns the directory git actually reads pre-commit hooks from.
