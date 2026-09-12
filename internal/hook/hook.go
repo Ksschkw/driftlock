@@ -288,8 +288,16 @@ func RunWith(ctx context.Context, opts Options) error {
 					fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("auto-fix failed for %s: %v\n", docPath, ferr)))
 				}
 			} else {
-				newFullDoc := docman.MergeSectionUpdates(fullDoc, updatedSections)
-				if werr := updater.WriteDoc(docFullPath, newFullDoc); werr != nil {
+				newFullDoc, changed := mergeFix(fullDoc, updatedSections)
+				if !changed {
+					// An empty reply, or headings that match nothing, leaves
+					// the document untouched. Reporting success here told the
+					// user their docs had been updated when they had not, and
+					// rewriting the identical content churned the file mtime.
+					if !opts.JSON {
+						fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("auto-fix produced no change for %s; the docs still need a manual update.\n", docPath)))
+					}
+				} else if werr := updater.WriteDoc(docFullPath, newFullDoc); werr != nil {
 					if !opts.JSON {
 						fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("failed to write updated doc %s: %v\n", docPath, werr)))
 					}
@@ -348,6 +356,15 @@ func RunWith(ctx context.Context, opts Options) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// mergeFix applies the model's rewritten sections to the full document and
+// reports whether the result actually differs. An empty reply, or a reply whose
+// headings match nothing in the document, is a no-op — and a no-op must never
+// be announced as "the docs have been updated".
+func mergeFix(fullDoc, updatedSections string) (string, bool) {
+	merged := docman.MergeSectionUpdates(fullDoc, updatedSections)
+	return merged, merged != fullDoc
 }
 
 // readDocForCheck returns the documentation content the check should judge.

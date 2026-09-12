@@ -166,7 +166,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ### M2.C — Auto-fix honesty
 
-- [ ] **M2.C.1 — Only claim a fix when content changed.**
+- [x] **M2.C.1 — Only claim a fix when content changed.**
   If the LLM returns empty output or headings fail to merge, Driftlock writes
   an identical file and still prints "has been updated". Compare before/after
   and report honestly.
@@ -336,3 +336,6 @@ deterministic string check does perfectly, instantly, and for free.
 - **M2.B.2** — `ResolveDocMapping` records each source at most once per
   document, so overlapping globs no longer duplicate diff lines or audit
   entries. Tests: `internal/config/docmap_test.go`.
+- **M2.C.1** — `mergeFix` reports whether the merged doc actually differs; an
+  empty or unmatched reply is a no-op and is reported as needing manual work,
+  and no longer rewrites the file. Tests: `internal/hook/fix_test.go`.
