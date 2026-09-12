@@ -39,7 +39,7 @@ try {
         $Verified = $true
         Write-Host "Checksum verified (per-asset)." -ForegroundColor Green
     } else {
-        Write-Host "Per-asset checksum mismatch." -ForegroundColor Yellow
+        throw "Checksum mismatch for $Target (per-asset). Refusing to install a binary that does not match its published checksum."
     }
 } catch {
     Write-Host "Per-asset checksum file not found, trying checksums.txt..." -ForegroundColor Yellow
@@ -60,7 +60,7 @@ if (-not $Verified) {
                 $Verified = $true
                 Write-Host "Checksum verified via checksums.txt." -ForegroundColor Green
             } else {
-                Write-Host "Checksum mismatch in checksums.txt." -ForegroundColor Yellow
+                throw "Checksum mismatch for $Target in checksums.txt. Refusing to install a binary that does not match its published checksum."
             }
         } else {
             Write-Host "Asset not found in checksums.txt." -ForegroundColor Yellow

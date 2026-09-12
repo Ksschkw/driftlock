@@ -58,7 +58,11 @@ if curl -sSL -o "${TARGET}.sha256" "$CHECKSUM_URL" 2>/dev/null; then
       VERIFIED=1
       info "Checksum verified (per-asset)."
     else
-      warn "Per-asset checksum mismatch."
+      # A published checksum that does not match must abort the install. This
+      # is the one signal that the downloaded binary is not the one that was
+      # released, and installing it anyway would defeat the point of shipping
+      # checksums at all.
+      die "Checksum mismatch for ${TARGET} (per-asset). Refusing to install a binary that does not match its published checksum."
     fi
   fi
 fi
@@ -67,14 +71,16 @@ fi
 if [ "$VERIFIED" -eq 0 ]; then
   CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${TAG}/checksums.txt"
   if curl -sSL -o checksums.txt "$CHECKSUMS_URL" 2>/dev/null; then
-    EXPECTED=$(grep " ${TARGET}$" checksums.txt | awk '{print $1}')
+    # `|| true` keeps `set -e` from killing the script when the asset is simply
+    # absent from checksums.txt, which is a warn-and-continue case.
+    EXPECTED=$(grep " ${TARGET}$" checksums.txt 2>/dev/null | awk '{print $1}' || true)
     if [ -n "$EXPECTED" ]; then
       ACTUAL=$(sha256sum "${TARGET}" 2>/dev/null | awk '{print $1}' || shasum -a 256 "${TARGET}" 2>/dev/null | awk '{print $1}')
       if [ "$EXPECTED" = "$ACTUAL" ]; then
         VERIFIED=1
         info "Checksum verified via checksums.txt."
       else
-        warn "Checksum mismatch in checksums.txt."
+        die "Checksum mismatch for ${TARGET} in checksums.txt. Refusing to install a binary that does not match its published checksum."
       fi
     else
       warn "Asset not found in checksums.txt."

@@ -25,6 +25,7 @@ Adopt it gradually with report-only mode, then flip it to blocking once your doc
 | [Ignoring symbols](./ignoring.md) | The `driftlock:ignore` annotation and scoping `doc_mapping` to avoid over-triggering. |
 | [Caching](./caching.md) | How the content-addressed verdict cache works, where it lives, and when it invalidates. |
 | [Architecture](./architecture.md) | The end-to-end pipeline, package layout, and key design invariants. |
+| [Releasing](./releasing.md) | How releases are built, versioned, and checksummed. |
 | [Troubleshooting](./troubleshooting.md) | Fixes for blocked commits, LLM errors, parser surprises, CI ref problems, and cache staleness. |
 
 ## Command summary

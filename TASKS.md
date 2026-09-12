@@ -230,7 +230,7 @@ exists to prevent. **This milestone is the highest priority.**
 - [x] **M4.2 — CI smoke test.** A workflow that runs the action against a known
   drifted fixture and asserts the expected exit code.
 - [x] **M4.3 — `driftlock version`.** Build metadata via `-ldflags`.
-- [ ] **M4.4 — Release hygiene.** Per-asset `.sha256`, correct `checksums.txt`,
+- [x] **M4.4 — Release hygiene.** Per-asset `.sha256`, correct `checksums.txt`,
   and no build artifacts in the source tree.
 - [ ] **M4.5 — Strict CI default.** Block on LLM error in CI where silent
   pass-through would defeat the gate.
@@ -440,3 +440,9 @@ deterministic string check does perfectly, instantly, and for free.
 - **M4.3** — `driftlock version` prints version/commit/date/Go/os-arch, with
   `-ldflags -X main.*` overrides and a `dev` default for working-tree builds.
   Tests: `cmd/driftlock/version_test.go`; documented in README/docs.
+- **M4.4** — `.github/workflows/release.yml` builds all five targets with
+  ldflags, publishes per-asset `.sha256` plus `checksums.txt`, and verifies its
+  own checksums before upload. Both installers now **abort** on a mismatched
+  checksum instead of installing anyway, and `install.sh` no longer dies on a
+  missing asset line under `set -e`. Tests: `cmd/driftlock/release_test.go`;
+  process documented in `docs/releasing.md`. `dist/` is gitignored.

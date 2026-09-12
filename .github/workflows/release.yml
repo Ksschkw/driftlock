@@ -1,0 +1,79 @@
+name: Release
+
+# Builds every platform binary, publishes a per-asset .sha256 next to each one,
+# and a combined checksums.txt. The installers verify against these, and refuse
+# to install a binary whose checksum does not match.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Test before releasing
+        run: go test ./...
+
+      - name: Build release binaries
+        run: |
+          set -euo pipefail
+
+          version="${GITHUB_REF_NAME}"
+          commit="$(git rev-parse --short HEAD)"
+          date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          ldflags="-X main.version=${version} -X main.commit=${commit} -X main.date=${date} -s -w"
+
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+            os="${target%/*}"
+            arch="${target#*/}"
+            name="driftlock-${os}-${arch}"
+            if [ "$os" = "windows" ]; then
+              name="${name}.exe"
+            fi
+            echo "building ${name}"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
+              go build -trimpath -ldflags "$ldflags" -o "dist/${name}" ./cmd/driftlock
+            (cd dist && sha256sum "${name}" > "${name}.sha256")
+          done
+
+          # checksums.txt covers the binaries only, not the .sha256 files.
+          (cd dist && find . -maxdepth 1 -type f -name 'driftlock-*' ! -name '*.sha256' -printf '%f\n' \
+            | sort | xargs sha256sum > checksums.txt)
+
+          echo "--- checksums.txt ---"
+          cat dist/checksums.txt
+
+      - name: Verify the published checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum -c checksums.txt
+          for f in *.sha256; do sha256sum -c "$f"; done
+
+      - name: Report the built version
+        run: ./dist/driftlock-linux-amd64 version
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/driftlock-*
+            dist/checksums.txt
+          generate_release_notes: true
