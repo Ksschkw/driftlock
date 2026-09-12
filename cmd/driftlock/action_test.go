@@ -66,3 +66,24 @@ func TestActionResolutionHonoursExplicitInputs(t *testing.T) {
 		}
 	}
 }
+
+// CI must not pass an unverified change because the provider was unreachable.
+// The action defaults to blocking and sets DRIFTLOCK_STRICT_LLM, which the CLI
+// honours over a committed lenient config.
+func TestActionDefaultsToBlockingOnLLMError(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "action.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	for _, want := range []string{
+		"block-on-llm-error:",
+		"default: 'true'",
+		"BLOCK_ON_LLM_ERROR",
+		"DRIFTLOCK_STRICT_LLM=1",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("action.yml is missing %q", want)
+		}
+	}
+}

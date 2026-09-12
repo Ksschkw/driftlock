@@ -69,6 +69,22 @@ type Report struct {
 	Unparsed []string `json:"unparsed,omitempty"`
 }
 
+// applyStrictLLMOverrides forces blocking behaviour when DRIFTLOCK_STRICT_LLM
+// is set truthy.
+//
+// CI is the one place where allowing a commit — or a merge — through on an
+// unreachable provider is indefensible: the gate exists precisely to make that
+// judgement, and a transient outage would silently convert it into a rubber
+// stamp. Local commits keep the friendlier default, because blocking a
+// developer's work on a flaky network is a worse trade.
+func applyStrictLLMOverrides(cfg *config.Config) {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("DRIFTLOCK_STRICT_LLM"))) {
+	case "1", "true", "yes":
+		cfg.Behavior.BlockOnLLMError = true
+		cfg.Behavior.BlockOnFalse = true
+	}
+}
+
 // skipRequested reports whether DRIFTLOCK_SKIP asks Driftlock to stand down.
 //
 // The project's .env is loaded first, so the flag can be configured there as
@@ -107,6 +123,7 @@ func RunWith(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
+	applyStrictLLMOverrides(cfg)
 	root, err := config.FindProjectRoot()
 	if err != nil {
 		return err

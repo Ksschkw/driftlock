@@ -231,6 +231,7 @@ driftlock log
 | `DRIFTLOCK_API_KEY` | Conventional variable referenced from config as `api_key = "${DRIFTLOCK_API_KEY}"`. Also the variable the [GitHub Action](./ci-cd.md) sets from your repo secret. |
 | `DRIFTLOCK_DEBUG=1` | Prints the raw LLM request/response payloads **and token usage** to stderr. Invaluable for debugging prompts and cost. |
 | `DRIFTLOCK_SKIP=true` | Bypasses the pre-commit hook for a single commit, e.g. `DRIFTLOCK_SKIP=true git commit -m "..."`. |
+| `DRIFTLOCK_STRICT_LLM=true` | Forces `block_on_llm_error` and `block_on_false` on, overriding the config. Set by the GitHub Action (and recommended for any CI) so a provider outage cannot silently pass an unverified change. |
 
 Any `${ENV_VAR}` in `api_key`, `endpoint`, or the `[llm.prompts]` strings is expanded at load time.
 

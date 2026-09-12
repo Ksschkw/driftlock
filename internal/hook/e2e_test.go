@@ -57,6 +57,13 @@ func (v *verdictServer) prompts() []string {
 	return append([]string(nil), v.requests...)
 }
 
+func boolLiteral(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
+}
+
 func runGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	full := append([]string{"-C", dir, "-c", "user.email=test@example.com", "-c", "user.name=Test"}, args...)
@@ -79,7 +86,7 @@ func write(t *testing.T, path, content string) {
 
 // driftFixture builds a real git repository with a committed API change and a
 // documentation file that maps to it, and returns (root, baseSHA, headSHA).
-func driftFixture(t *testing.T, endpoint string) (string, string, string) {
+func driftFixture(t *testing.T, endpoint string, blockOnLLMError bool) (string, string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	runGit(t, dir, "init")
@@ -103,7 +110,7 @@ func driftFixture(t *testing.T, endpoint string) (string, string, string) {
 		`[behavior]`,
 		`auto_fix = false`,
 		`block_on_false = true`,
-		`block_on_llm_error = true`,
+		`block_on_llm_error = ` + boolLiteral(blockOnLLMError),
 		`max_retries = 0`,
 		`cache = false`,
 		``,
@@ -129,7 +136,7 @@ func TestEndToEndDriftIsDetected(t *testing.T) {
 	stub := &verdictServer{verdict: "FALSE. Greet now takes an excited flag that the documentation does not mention."}
 	srv := stub.start(t)
 
-	dir, base, head := driftFixture(t, srv.URL)
+	dir, base, head := driftFixture(t, srv.URL, true)
 	t.Chdir(dir)
 
 	err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head})
@@ -157,7 +164,7 @@ func TestEndToEndConsistentDocsPass(t *testing.T) {
 	stub := &verdictServer{verdict: "TRUE. The documentation matches the current signatures."}
 	srv := stub.start(t)
 
-	dir, base, head := driftFixture(t, srv.URL)
+	dir, base, head := driftFixture(t, srv.URL, true)
 	t.Chdir(dir)
 
 	if err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head}); err != nil {
@@ -177,7 +184,7 @@ func TestEndToEndLLMErrorBlocks(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	dir, base, head := driftFixture(t, srv.URL)
+	dir, base, head := driftFixture(t, srv.URL, true)
 	t.Chdir(dir)
 
 	// Dry-run reports the error rather than exiting; range mode is inherently
@@ -196,7 +203,7 @@ func TestEndToEndBodyOnlyEditIsSilent(t *testing.T) {
 	stub := &verdictServer{verdict: "TRUE."}
 	srv := stub.start(t)
 
-	dir, _, _ := driftFixture(t, srv.URL)
+	dir, _, _ := driftFixture(t, srv.URL, true)
 	// Change only the function body and commit on top of head.
 	write(t, filepath.Join(dir, "src", "greet.go"),
 		"package src\n\nfunc Greet(name string, excited bool) string { return name + \"!\" }\n")
@@ -212,5 +219,44 @@ func TestEndToEndBodyOnlyEditIsSilent(t *testing.T) {
 	}
 	if n := len(stub.prompts()); n != 0 {
 		t.Errorf("body-only edit called the LLM %d time(s); it must be silent", n)
+	}
+}
+
+// DRIFTLOCK_STRICT_LLM must override a config that permits proceeding on an
+// unreachable provider. This is the CI guarantee: a committed config cannot
+// downgrade the gate.
+func TestEndToEndStrictLLMOverridesLenientConfig(t *testing.T) {
+	unsetEnv(t, "DRIFTLOCK_SKIP")
+	t.Setenv("DRIFTLOCK_STRICT_LLM", "1")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	dir, base, head := driftFixture(t, srv.URL, false)
+	t.Chdir(dir)
+
+	if err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head}); err == nil {
+		t.Fatal("strict mode did not force a failure on provider error")
+	}
+}
+
+// Without strict mode the same lenient config allows the run to pass, which is
+// the documented local-development trade.
+func TestEndToEndLenientConfigAllowsProviderError(t *testing.T) {
+	unsetEnv(t, "DRIFTLOCK_SKIP")
+	unsetEnv(t, "DRIFTLOCK_STRICT_LLM")
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	dir, base, head := driftFixture(t, srv.URL, false)
+	t.Chdir(dir)
+
+	if err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head}); err != nil {
+		t.Fatalf("a lenient config should allow the run, got %v", err)
 	}
 }

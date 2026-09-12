@@ -53,14 +53,34 @@ jobs:
 
 | Input | Default | Description |
 | --- | --- | --- |
-| `base` | `${{ github.event.pull_request.base.sha }}` | Base git ref to compare against (the PR target). |
-| `head` | `${{ github.sha }}` | Head git ref (the PR tip). |
+| `base` | `''` | Base git ref to compare against. When empty, the action resolves the pull request base, then the push's previous commit. |
+| `head` | `''` | Head git ref. When empty, the action resolves the checked-out commit. |
 | `version` | `latest` | Driftlock version to install — a git tag, or `latest`. Installed via `go install ...@<version>`. |
 | `api-key` | `''` | LLM API key. Exposed to Driftlock as `$DRIFTLOCK_API_KEY`. **Pass a repository secret.** |
 | `report-only` | `'false'` | When `'true'`, report drift without failing the job (adds `--report`, exit 0). |
+| `block-on-llm-error` | `'true'` | When `'true'`, a provider outage fails the job. Sets `DRIFTLOCK_STRICT_LLM=1`. |
 | `working-directory` | `'.'` | Directory containing `.driftlock.toml`. |
 
+> `base` and `head` deliberately default to empty rather than to a `${{ }}`
+> expression: GitHub does **not** evaluate expressions in action metadata
+> defaults, so an expression there becomes a literal string and `git diff`
+> receives a bogus revision. The action resolves the refs inside a `run:` step
+> instead, where the workflow context is evaluated.
+
 > The Action sets up Go 1.24, installs Driftlock with `go install github.com/Ksschkw/driftlock/cmd/driftlock@<version>`, then runs `driftlock check --base <base> --head <head>` (adding `--report` when `report-only` is `'true'`).
+
+### Failing closed
+
+The action sets `DRIFTLOCK_STRICT_LLM=1` unless you pass
+`block-on-llm-error: 'false'`. That forces `block_on_llm_error` and
+`block_on_false` on, overriding `.driftlock.toml`, so a committed config cannot
+downgrade the gate and a provider outage cannot pass an unverified pull request.
+
+If you drive Driftlock from another CI system, set it yourself:
+
+```bash
+DRIFTLOCK_STRICT_LLM=1 driftlock check --base "$BASE_SHA" --head "$HEAD_SHA"
+```
 
 ### The `fetch-depth: 0` gotcha
 

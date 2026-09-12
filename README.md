@@ -373,6 +373,10 @@ DRIFTLOCK_SKIP=true git commit -m "your message"
 
 This bypasses all checks and allows the commit to proceed immediately.
 
+In CI the opposite is wanted. Set `DRIFTLOCK_STRICT_LLM=1` to force
+`block_on_llm_error` and `block_on_false` on, so a provider outage fails the job
+instead of passing an unverified change. The GitHub Action sets it by default.
+
 ---
 
 ## Audit Trail (Solana)

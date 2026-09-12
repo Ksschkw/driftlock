@@ -232,7 +232,7 @@ exists to prevent. **This milestone is the highest priority.**
 - [x] **M4.3 — `driftlock version`.** Build metadata via `-ldflags`.
 - [x] **M4.4 — Release hygiene.** Per-asset `.sha256`, correct `checksums.txt`,
   and no build artifacts in the source tree.
-- [ ] **M4.5 — Strict CI default.** Block on LLM error in CI where silent
+- [x] **M4.5 — Strict CI default.** Block on LLM error in CI where silent
   pass-through would defeat the gate.
 
 ---
@@ -446,3 +446,10 @@ deterministic string check does perfectly, instantly, and for free.
   checksum instead of installing anyway, and `install.sh` no longer dies on a
   missing asset line under `set -e`. Tests: `cmd/driftlock/release_test.go`;
   process documented in `docs/releasing.md`. `dist/` is gitignored.
+- **M4.5** — `DRIFTLOCK_STRICT_LLM=1` forces `block_on_llm_error` and
+  `block_on_false` on, overriding the config; the action defaults to setting it
+  via a new `block-on-llm-error` input. End-to-end tests prove strict mode
+  overrides a lenient config while the lenient config still passes without it.
+  Tests: `internal/hook/strict_test.go`, `TestEndToEndStrictLLMOverridesLenientConfig`,
+  `TestEndToEndLenientConfigAllowsProviderError`; documented in README and
+  docs/ci-cd.md.

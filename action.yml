@@ -29,6 +29,12 @@ inputs:
     description: 'When "true", report drift without failing the job (exit 0). Useful for gradual adoption.'
     required: false
     default: 'false'
+  block-on-llm-error:
+    description: >-
+      When "true" (the default), a provider outage fails the job instead of
+      letting an unverified change through. Set to "false" to warn only.
+    required: false
+    default: 'true'
   working-directory:
     description: 'Directory containing .driftlock.toml.'
     required: false
@@ -91,11 +97,19 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         DRIFTLOCK_API_KEY: ${{ inputs.api-key }}
+        BLOCK_ON_LLM_ERROR: ${{ inputs.block-on-llm-error }}
         BASE_REF: ${{ steps.refs.outputs.base }}
         HEAD_REF: ${{ steps.refs.outputs.head }}
         REPORT_ONLY: ${{ inputs.report-only }}
       run: |
         set -euo pipefail
+
+        # CI must not pass an unverified change because the provider was
+        # unreachable. DRIFTLOCK_STRICT_LLM forces block_on_llm_error and
+        # block_on_false regardless of the committed config.
+        if [ "$BLOCK_ON_LLM_ERROR" = "true" ]; then
+          export DRIFTLOCK_STRICT_LLM=1
+        fi
 
         args=(check --base "$BASE_REF" --head "$HEAD_REF")
         if [ "$REPORT_ONLY" = "true" ]; then
