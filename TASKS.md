@@ -92,7 +92,7 @@ exists to prevent. **This milestone is the highest priority.**
   different types are distinguishable, and accept `impl<T> Trait for Type`.
   *Accept:* two `impl` blocks with a same-named method yield two symbols.
 
-- [ ] **M1.A.10 — Kotlin / Swift / Scala return types.**
+- [x] **M1.A.10 — Kotlin / Swift / Scala return types.**
   Include trailing `: Type` / `-> Type` return annotations in the signature
   where the language declares them inline.
   *Accept:* a return-type change produces one `modified` change per language.
@@ -321,3 +321,6 @@ deterministic string check does perfectly, instantly, and for free.
   stability. Tests: `TestSameNameMethodRemovalIsRemoved`,
   `TestJavaOverloadRemovalIsRemoved`, `TestSameNameMethodEditIsModified`,
   `TestChangeOrderIsDeterministic`.
+- **M1.A.10** — Kotlin (`: T`), Swift (`-> T`), and Scala (`: T`) return types
+  are part of the signature, with function-typed parameters tolerated. Tests:
+  `internal/parser/jvm_test.go`.

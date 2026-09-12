@@ -165,9 +165,13 @@ var (
 		`(?m)^[\t ]*(?:(?:public|private|protected|export|abstract|sealed|final|open|data|case|internal|static)\s+)*` +
 			`\b(class|struct|interface|trait|enum|object|record|module)\s+(\w+)`)
 
-	pSwiftFunc = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|internal|fileprivate|open|static|final|override|mutating)\s+)*func\s+(\w+)\s*(?:<[^>]*>)?\s*\(([\s\S]*?)\)`)
-	pKotlinFun = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|protected|internal|open|override|suspend|inline)\s+)*fun\s+(?:<[^>]*>\s*)?(\w+)\s*\(([\s\S]*?)\)`)
-	pScalaDef  = regexp.MustCompile(`(?m)^[\t ]*(?:(?:private|protected|final|override|implicit)\s+)*def\s+(\w+)\s*(?:\[[^\]]*\])?\s*\(([\s\S]*?)\)`)
+	// Swift, Kotlin, and Scala all declare the return type inline. It was
+	// omitted, so a return-type-only change produced no structural change.
+	// Each pattern uses the nested-paren-tolerant parameter list because a
+	// parameter may itself be a function type (`(Int) -> String`).
+	pSwiftFunc = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|internal|fileprivate|open|static|final|override|mutating)\s+)*func\s+(\w+)\s*(?:<[^>]*>)?\s*` + paramListNoSemi + `\s*(?:->\s*[^;{\n]+)?`)
+	pKotlinFun = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|protected|internal|open|override|suspend|inline|operator|infix|tailrec|external)\s+)*fun\s+(?:<[^>]*>\s*)?(\w+)\s*` + paramListNoSemi + `\s*(?::\s*[^;{=\n]+)?`)
+	pScalaDef  = regexp.MustCompile(`(?m)^[\t ]*(?:(?:private|protected|final|override|implicit|lazy)\s+)*def\s+(\w+)\s*(?:\[[^\]]*\])?\s*` + paramListNoSemi + `\s*(?::\s*[^;{=\n]+)?`)
 
 	pShellFunc = regexp.MustCompile(`(?m)^[\t ]*(?:function\s+)?([\w-]+)\s*\(\)\s*\{`)
 	pLuaFunc   = regexp.MustCompile(`(?m)(?:^|\blocal\s+)function\s+([\w.:]+)\s*\(([^)]*)\)`)
