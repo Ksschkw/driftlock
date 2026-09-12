@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -73,6 +74,37 @@ type BehaviorConfig struct {
 	// it. Off by default because a file that legitimately declares nothing is
 	// common; the warning is always available through DRIFTLOCK_DEBUG.
 	ReportUnparsed bool `toml:"report_unparsed"`
+	// CheckMode selects how a check is decided. See the CheckMode constants.
+	// An unset or unrecognised value resolves to "auto".
+	CheckMode string `toml:"check_mode"`
+}
+
+// Check modes for BehaviorConfig.CheckMode.
+const (
+	// CheckModeAuto decides deterministically when the change set allows it and
+	// falls back to the model otherwise. This is the default.
+	CheckModeAuto = "auto"
+	// CheckModeDeterministic never calls the model. Changes it cannot decide
+	// (a modified signature that the documentation does mention) are reported
+	// as unjudged rather than guessed, so Driftlock can run with no API key.
+	CheckModeDeterministic = "deterministic"
+	// CheckModeLLM always consults the model, as Driftlock did before the
+	// deterministic path existed.
+	CheckModeLLM = "llm"
+)
+
+// ResolvedCheckMode returns the effective check mode. An empty or unrecognised
+// value resolves to auto, so configs written before this option existed keep
+// working and a typo cannot silently disable the model.
+func (b BehaviorConfig) ResolvedCheckMode() string {
+	switch strings.ToLower(strings.TrimSpace(b.CheckMode)) {
+	case CheckModeDeterministic:
+		return CheckModeDeterministic
+	case CheckModeLLM:
+		return CheckModeLLM
+	default:
+		return CheckModeAuto
+	}
 }
 
 // CacheEnabled reports whether the verdict cache is on. It defaults to true
@@ -114,6 +146,7 @@ func DefaultConfig() *Config {
 			MaxRetries:      2,
 			IncludeFullDiff: false,
 			BlockOnLLMError: false, // default: allow commit on LLM error
+			CheckMode:       CheckModeAuto,
 		},
 		Audit: AuditConfig{
 			Solana: false,

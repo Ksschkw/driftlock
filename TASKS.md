@@ -259,7 +259,7 @@ The LLM is currently used as a coverage checker for the common case, which a
 deterministic string check does perfectly, instantly, and for free.
 
 - [x] **M6.1 — Deterministic coverage check** for added/removed symbols.
-- [ ] **M6.2 — `check_mode = auto|deterministic|llm`** config.
+- [x] **M6.2 — `check_mode = auto|deterministic|llm`** config.
 - [ ] **M6.3 — Skip the LLM when the deterministic verdict is decisive.**
 - [ ] **M6.4 — Tests and docs** for the modes and the cost story.
 
@@ -478,3 +478,7 @@ deterministic string check does perfectly, instantly, and for free.
   matching (and modified ones when undocumented), returning `(ok, decisive,
   reason)` so the caller knows when a model is genuinely needed. Not yet wired
   into the pipeline. Tests: `internal/hook/decide_test.go`.
+- **M6.2** — `[behavior] check_mode` (`auto` default, `deterministic`, `llm`)
+  with `ResolvedCheckMode()`; an unset or misspelled value resolves to `auto`
+  so a typo cannot silently disable the model. Tests:
+  `TestResolvedCheckMode`, `TestLoadConfigCheckMode`.
