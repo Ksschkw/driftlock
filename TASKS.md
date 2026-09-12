@@ -216,7 +216,7 @@ exists to prevent. **This milestone is the highest priority.**
   destroy its own prior work.
 - [x] **M3.5 — PATH detection.** Warn when `driftlock` is not resolvable,
   since the hook shells out to it.
-- [ ] **M3.6 — Tests for every install path** (absent hook, foreign hook,
+- [x] **M3.6 — Tests for every install path** (absent hook, foreign hook,
   husky `hooksPath`, re-init).
 
 ---
@@ -422,3 +422,8 @@ deterministic string check does perfectly, instantly, and for free.
   `TestInstallHookIsIdempotent`, `TestInstallHookIsIdempotentWithForeignHook`.
 - **M3.5** — `driftlockOnPath` warns at install time when the binary the hook
   invokes is not resolvable. Test: `TestDriftlockOnPath`.
+- **M3.6** — End-to-end hook tests that execute the installed script against a
+  stub binary: the chained hook runs the foreign hook's own commands then
+  `driftlock hook-run`, propagates a blocking exit code, and skips cleanly when
+  the binary is absent. Tests: `TestChainedHookRunsDriftlock`,
+  `TestChainedHookPropagatesFailure`, `TestChainedHookSkipsWhenBinaryMissing`.

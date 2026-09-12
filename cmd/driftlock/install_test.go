@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -230,5 +231,109 @@ func TestDriftlockOnPath(t *testing.T) {
 	t.Setenv("PATH", bin)
 	if !driftlockOnPath() {
 		t.Fatal("driftlockOnPath() = false with a stub on PATH")
+	}
+}
+
+// stubDriftlock writes an executable named `driftlock` on PATH that records its
+// arguments to markerPath and exits with the given code.
+func stubDriftlock(t *testing.T, exitCode int, markerPath string) string {
+	t.Helper()
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"echo \"$@\" > " + markerPath + "\n" +
+		"exit " + string(rune('0'+exitCode)) + "\n"
+	if err := os.WriteFile(filepath.Join(bin, "driftlock"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+// The chained hook must actually execute driftlock, after the original hook's
+// own commands, and must propagate a blocking exit code.
+func TestChainedHookRunsDriftlock(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+	hooksDirPath := filepath.Join(dir, ".git", "hooks")
+	if err := os.MkdirAll(hooksDirPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDirPath, "pre-commit")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho custom-check-ran\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := installPreCommitHook(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	marker := filepath.Join(t.TempDir(), "marker")
+	bin := stubDriftlock(t, 0, marker)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	out, err := exec.Command("sh", hookPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("hook failed: %v\n%s", err, out)
+	}
+	if !strings.Contains(string(out), "custom-check-ran") {
+		t.Errorf("foreign hook did not run:\n%s", out)
+	}
+	recorded, readErr := os.ReadFile(marker)
+	if readErr != nil {
+		t.Fatalf("driftlock was not invoked by the chained hook: %v", readErr)
+	}
+	if !strings.Contains(string(recorded), "hook-run") {
+		t.Errorf("driftlock invoked with %q, want hook-run", recorded)
+	}
+}
+
+// A driftlock failure must fail the commit.
+func TestChainedHookPropagatesFailure(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+	hooksDirPath := filepath.Join(dir, ".git", "hooks")
+	if err := os.MkdirAll(hooksDirPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDirPath, "pre-commit")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho custom\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := installPreCommitHook(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	bin := stubDriftlock(t, 1, filepath.Join(t.TempDir(), "marker"))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	if err := exec.Command("sh", hookPath).Run(); err == nil {
+		t.Fatal("hook succeeded although driftlock exited 1")
+	}
+}
+
+// A machine without driftlock on PATH must not break unrelated commits when
+// the hook was chained (the guard is a PATH check).
+func TestChainedHookSkipsWhenBinaryMissing(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+	hooksDirPath := filepath.Join(dir, ".git", "hooks")
+	if err := os.MkdirAll(hooksDirPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDirPath, "pre-commit")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho custom\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := installPreCommitHook(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	// Resolve sh before emptying PATH: the hook itself is a /bin/sh script, and
+	// this test is about driftlock being absent, not sh.
+	shPath, err := exec.LookPath("sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir())
+	if out, err := exec.Command(shPath, hookPath).CombinedOutput(); err != nil {
+		t.Fatalf("hook failed without driftlock on PATH: %v\n%s", err, out)
 	}
 }
