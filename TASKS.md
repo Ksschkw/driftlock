@@ -249,7 +249,7 @@ exists to prevent. **This milestone is the highest priority.**
 - [x] **M5.4 — Fix or remove `driftlock status`.** It renders a full prompt and
   passes it as the `diff` argument, double-wrapping the check prompt, and reads
   HEAD rather than the working tree.
-- [ ] **M5.5 — Injectable git layer** so pipeline tests need no real repo.
+- [x] **M5.5 — Injectable git layer** so pipeline tests need no real repo.
 
 ---
 
@@ -469,3 +469,8 @@ deterministic string check does perfectly, instantly, and for free.
   provider, no double-wrapped prompt, no HEAD-vs-working-tree confusion. It
   lists symbols the mapped docs never mention; `--strict` exits non-zero.
   Tests: `internal/hook/status_test.go`; README/docs updated.
+- **M5.5** — `Options.source` (unexported) injects a `changeSource` abstraction
+  over git, so the pipeline runs entirely in memory in tests. New tests cover an
+  injected drifted run, a deleted source (skipped, no model call), and an
+  unparsable source reported in the JSON `unparsed` field. Tests:
+  `internal/hook/source_test.go`.

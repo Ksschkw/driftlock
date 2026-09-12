@@ -42,6 +42,35 @@ type Options struct {
 	Report bool
 	// JSON emits a machine-readable report to stdout instead of colored text.
 	JSON bool
+
+	// source overrides repository access. It is unexported so only this package
+	// (in practice, its tests) can supply one; production always uses git.
+	source changeSource
+}
+
+// changeSource abstracts the repository operations a run needs. The production
+// implementation shells out to git; tests supply an in-memory one so pipeline
+// edge cases — a deleted source, an empty document, a file with no signatures —
+// can be exercised directly instead of by constructing a commit history for
+// each one.
+type changeSource interface {
+	// Changes returns the changed files plus accessors for their old (HEAD or
+	// base) and new (index or head) content.
+	Changes(opts Options, rangeMode bool) ([]string, func(string) string, func(string) string, error)
+	// DocContent returns the documentation content the check should judge.
+	DocContent(root, docPath, headRef string, rangeMode bool) (string, error)
+}
+
+// gitChangeSource is the production change source: the staging index for a
+// local commit, or two refs for CI.
+type gitChangeSource struct{}
+
+func (gitChangeSource) Changes(opts Options, rangeMode bool) ([]string, func(string) string, func(string) string, error) {
+	return resolveSources(opts, rangeMode)
+}
+
+func (gitChangeSource) DocContent(root, docPath, headRef string, rangeMode bool) (string, error) {
+	return readDocForCheck(root, docPath, headRef, rangeMode)
 }
 
 // Sentinel errors returned by RunWith. The pipeline never exits the process
@@ -151,7 +180,11 @@ func RunWith(ctx context.Context, opts Options) error {
 	}
 
 	// Resolve the changed files and content accessors for the active mode.
-	files, oldContentOf, newContentOf, err := resolveSources(opts, rangeMode)
+	source := opts.source
+	if source == nil {
+		source = gitChangeSource{}
+	}
+	files, oldContentOf, newContentOf, err := source.Changes(opts, rangeMode)
 	if err != nil {
 		return err
 	}
@@ -244,7 +277,7 @@ func RunWith(ctx context.Context, opts Options) error {
 		changedNames := publicNames(allChanges)
 
 		docFullPath := filepath.Join(root, docPath)
-		fullDoc, err := readDocForCheck(root, docPath, opts.HeadRef, rangeMode)
+		fullDoc, err := source.DocContent(root, docPath, opts.HeadRef, rangeMode)
 		if err != nil {
 			if !opts.JSON {
 				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not read doc %s: %v\n", docPath, err)))
