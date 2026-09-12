@@ -37,7 +37,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ### M1.A — Language coverage
 
-- [ ] **M1.A.1 — Go generic functions.**
+- [x] **M1.A.1 — Go generic functions.**
   `func Map[T any, U any](xs []T, f func(T) U) []U` currently extracts
   **nothing**, because `pGoFunc` requires `(` immediately after the name.
   Accept an optional type-parameter list after the function name and after a
@@ -273,4 +273,8 @@ deterministic string check does perfectly, instantly, and for free.
 
 ## Progress log
 
-Appended after each completed micro-milestone.
+- **M1.A.1** — Go generics + nested-paren parameters. `pGoFunc` now accepts a
+  type-parameter list after the function name and a generic receiver, and
+  tolerates one level of nested parentheses in parameters. This also fixed a
+  pre-existing truncation of func-typed parameters. Tests:
+  `internal/parser/go_test.go`.

@@ -42,8 +42,19 @@ var (
 
 	pDefine = regexp.MustCompile(`(?m)^[\t ]*#\s*define\s+(\w+)`)
 
-	// Go: supports multi-line params via [\s\S] up to the closing paren.
-	pGoFunc = regexp.MustCompile(`(?m)^[\t ]*func\s+(?:\(\s*\w+\s+[\*]?\w+\s*\)\s+)?(\w+)\s*\(([\s\S]*?)\)\s*(?:\([\s\S]*?\)|[\w\[\]\.\*&<> ,]+)?\s*\{?`)
+	// Go: supports multi-line params, generic receivers (`func (s *Stack[T])`),
+	// type-parameter lists (`func Map[T any, U any]`), and function-typed
+	// parameters (`f func(T) U`). The parameter group tolerates one level of
+	// nested parentheses; a plain non-greedy match stopped at the FIRST ')',
+	// which truncated any signature containing a func-typed or callback
+	// parameter (e.g. `func Apply(xs []int, f func(int) int) []int`).
+	pGoFunc = regexp.MustCompile(
+		`(?m)^[\t ]*func\s+` +
+			`(?:\(\s*\w+\s+\*?\w+(?:\s*\[[^\]]*\])?\s*\)\s+)?` +
+			`(\w+)\s*` +
+			`(?:\[[^\]]*\])?\s*` +
+			`\((?:[^(){}]|\((?:[^(){}]*)\))*\)` +
+			`\s*(?:\([\s\S]*?\)|[\w\[\]\.\*&<> ,]+)?\s*\{?`)
 
 	pGoType = regexp.MustCompile(`(?m)^[\t ]*type\s+(\w+)\s+(struct|interface|func|map|\[|chan|\w)`)
 
