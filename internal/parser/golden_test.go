@@ -29,7 +29,7 @@ func TestGoldenCorpus(t *testing.T) {
 
 	checked := 0
 	for _, entry := range entries {
-		if entry.IsDir() || strings.HasSuffix(entry.Name(), ".golden") {
+		if entry.IsDir() || strings.HasSuffix(entry.Name(), ".golden") || strings.HasPrefix(entry.Name(), "README") {
 			continue
 		}
 		name := entry.Name()

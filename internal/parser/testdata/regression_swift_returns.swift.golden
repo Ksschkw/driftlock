@@ -1,0 +1,2 @@
+fetch	func fetch(url: String) -> Data
+onDone	func onDone(handler: (Int) -> Void, label: String)

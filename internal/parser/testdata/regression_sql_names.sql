@@ -1,0 +1,2 @@
+CREATE TABLE users (id INT);
+CREATE OR REPLACE VIEW active_users AS SELECT 1;

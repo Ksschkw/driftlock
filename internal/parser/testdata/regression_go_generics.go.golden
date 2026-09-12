@@ -1,0 +1,4 @@
+Map	func Map[T any, U any](xs []T, f func(T) U) []U
+Push	func (s *Stack[T]) Push(v T)
+Set	type Set[T comparable] map
+Stack	type Stack[T any] struct

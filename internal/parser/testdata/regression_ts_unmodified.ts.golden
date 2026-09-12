@@ -1,0 +1,5 @@
+Service	export class Service
+constructor	constructor(private readonly url: string)
+create	public static async create(url: string): Promise<Service>
+format	private format(x: number)
+run	run(x: number): string

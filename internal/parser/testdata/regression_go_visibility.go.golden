@@ -1,0 +1,2 @@
+Exported	func Exported(a int)
+Public	type Public struct

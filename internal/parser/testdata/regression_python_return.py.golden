@@ -1,0 +1,2 @@
+parse	def parse(text: str) -> int
+render	def render(name: str, options: dict = {}, tags: set = {1, 2}) -> str

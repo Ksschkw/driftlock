@@ -1,0 +1,2 @@
+active_users	CREATE OR REPLACE VIEW active_users
+users	CREATE TABLE users

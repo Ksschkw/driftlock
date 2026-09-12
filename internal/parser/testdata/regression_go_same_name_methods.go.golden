@@ -1,0 +1,4 @@
+A	type A struct
+B	type B struct
+Close	func (a *A) Close() error
+Close	func (b *B) Close() error

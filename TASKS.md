@@ -146,7 +146,7 @@ exists to prevent. **This milestone is the highest priority.**
   compares extracted signatures against a golden file, with an update flag.
   *Accept:* adding a corpus file without a golden fails loudly.
 
-- [ ] **M1.C.2 — Regression corpus for every review finding.**
+- [x] **M1.C.2 — Regression corpus for every review finding.**
   One test per bug in this section (generics, unmodified methods, return
   types, overloads, dict defaults, same-name methods).
   *Accept:* reverting any fix turns a test red.
@@ -394,3 +394,6 @@ deterministic string check does perfectly, instantly, and for free.
   longer reach the structural diff. Python golden updated by the harness,
   proving it catches the change. Tests: `internal/parser/visibility_test.go`;
   docs/architecture.md documents the rules.
+- **M1.C.2** — 12 minimal `regression_*` corpus files, one per finding, plus
+  `testdata/README.md` mapping every finding to its sample and asserting test.
+  The harness skips `README*` so documentation can live beside the corpus.
