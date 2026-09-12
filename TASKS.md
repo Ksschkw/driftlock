@@ -229,7 +229,7 @@ exists to prevent. **This milestone is the highest priority.**
   Compute base/head inside a `run:` step (or require them explicitly).
 - [x] **M4.2 — CI smoke test.** A workflow that runs the action against a known
   drifted fixture and asserts the expected exit code.
-- [ ] **M4.3 — `driftlock version`.** Build metadata via `-ldflags`.
+- [x] **M4.3 — `driftlock version`.** Build metadata via `-ldflags`.
 - [ ] **M4.4 — Release hygiene.** Per-asset `.sha256`, correct `checksums.txt`,
   and no build artifacts in the source tree.
 - [ ] **M4.5 — Strict CI default.** Block on LLM error in CI where silent
@@ -437,3 +437,6 @@ deterministic string check does perfectly, instantly, and for free.
   corpus is not stale. **This caught a real bug**: in dry-run/range mode an LLM
   error printed an all-clear and passed; `check` now returns an error and the
   summary never claims success after a failure.
+- **M4.3** — `driftlock version` prints version/commit/date/Go/os-arch, with
+  `-ldflags -X main.*` overrides and a `dev` default for working-tree builds.
+  Tests: `cmd/driftlock/version_test.go`; documented in README/docs.

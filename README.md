@@ -245,6 +245,7 @@ The `ollama` driver speaks the native Ollama API (default
 | `driftlock fix` | Force regeneration of all mapped documentation |
 | `driftlock log` | Show the last 20 audit log entries |
 | `driftlock status` | Show current status |
+| `driftlock version` | Print version and build metadata |
 
 `driftlock check` runs against the **staged index** by default (identical to the
 hook). Pass `--base` (and optionally `--head`) to compare two Git refs instead —

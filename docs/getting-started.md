@@ -35,10 +35,12 @@ go install github.com/Ksschkw/driftlock/cmd/driftlock@latest
 ### Verify the install
 
 ```bash
-driftlock status
+driftlock version
 ```
 
-If the command runs, Driftlock is on your `PATH`.
+If the command runs, Driftlock is on your `PATH`. It prints the release tag, the
+commit it was built from, and the Go version; a binary built from a working tree
+reports `dev`.
 
 ## 2. Initialize your repository
 

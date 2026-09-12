@@ -37,5 +37,6 @@ Adopt it gradually with report-only mode, then flip it to blocking once your doc
 | `driftlock hook-run [--no-fix]` | Internal command invoked by the pre-commit hook. |
 | `driftlock log` | Show the last 20 audit-log entries. |
 | `driftlock status` | Show current status. |
+| `driftlock version` | Print version and build metadata. |
 
 See [Getting started](./getting-started.md) to install.
