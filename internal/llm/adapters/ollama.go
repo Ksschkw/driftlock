@@ -27,7 +27,7 @@ func NewOllama(cfg config.LLMConfig, prompts *config.PromptConfig) (types.Provid
 	return &ollama{
 		cfg:     cfg,
 		prompts: prompts,
-		client:  &http.Client{},
+		client:  &http.Client{Timeout: cfg.HTTPTimeout()},
 	}, nil
 }
 

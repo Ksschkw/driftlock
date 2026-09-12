@@ -27,7 +27,7 @@ func NewOpenAICompatible(cfg config.LLMConfig, prompts *config.PromptConfig) (ty
 	return &openAICompatible{
 		cfg:     cfg,
 		prompts: prompts,
-		client:  &http.Client{},
+		client:  &http.Client{Timeout: cfg.HTTPTimeout()},
 	}, nil
 }
 

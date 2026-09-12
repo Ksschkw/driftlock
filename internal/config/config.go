@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -30,6 +31,22 @@ type LLMConfig struct {
 	APIKey   string         `toml:"api_key"`
 	Options  map[string]any `toml:"options"`
 	Prompts  *PromptConfig  `toml:"prompts"`
+	// TimeoutSeconds bounds a single LLM request. It defaults to 60 when
+	// omitted or non-positive. Without it a hung or black-holed provider left
+	// the http.Client waiting forever, which hangs `git commit`.
+	TimeoutSeconds int `toml:"timeout_seconds"`
+}
+
+// DefaultLLMTimeout is the per-request LLM timeout used when the config does
+// not specify one.
+const DefaultLLMTimeout = 60 * time.Second
+
+// HTTPTimeout returns the per-request timeout for LLM calls.
+func (l LLMConfig) HTTPTimeout() time.Duration {
+	if l.TimeoutSeconds <= 0 {
+		return DefaultLLMTimeout
+	}
+	return time.Duration(l.TimeoutSeconds) * time.Second
 }
 
 // PromptConfig allows users to override the default prompts.
@@ -77,9 +94,10 @@ func DefaultConfig() *Config {
 			},
 		},
 		LLM: LLMConfig{
-			Driver:   "ollama",
-			Endpoint: "http://localhost:11434",
-			Model:    "codestral:22b",
+			Driver:         "ollama",
+			Endpoint:       "http://localhost:11434",
+			Model:          "codestral:22b",
+			TimeoutSeconds: int(DefaultLLMTimeout / time.Second),
 			Options: map[string]any{
 				"temperature": 0.0,
 				"max_tokens":  2048,

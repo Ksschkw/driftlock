@@ -174,7 +174,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ### M2.D — Timeouts and failure modes
 
-- [ ] **M2.D.1 — HTTP client timeout.**
+- [x] **M2.D.1 — HTTP client timeout.**
   Adapters use `&http.Client{}` with no timeout and `context.Background()`, so
   a hung provider hangs `git commit` forever. Add a configurable timeout.
 - [ ] **M2.D.2 — Per-run deadline.**
@@ -339,3 +339,6 @@ deterministic string check does perfectly, instantly, and for free.
 - **M2.C.1** — `mergeFix` reports whether the merged doc actually differs; an
   empty or unmatched reply is a no-op and is reported as needing manual work,
   and no longer rewrites the file. Tests: `internal/hook/fix_test.go`.
+- **M2.D.1** — Added `[llm] timeout_seconds` (default 60) and
+  `LLMConfig.HTTPTimeout()`, applied to both adapters' `http.Client`. Docs and
+  `.driftlock.example.toml` updated. Tests: `internal/config/config_test.go`.

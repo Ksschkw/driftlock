@@ -17,6 +17,10 @@ api_key = "${DRIFTLOCK_API_KEY}"   # Get your key at https://openrouter.ai/keys
 # endpoint = "http://localhost:11434"
 # model = "codestral:22b"
 
+# Per-request LLM timeout in seconds (default 60). Prevents a hung provider
+# from hanging `git commit` indefinitely.
+timeout_seconds = 60
+
 [llm.options]
 temperature = 0.0
 max_tokens = 4096

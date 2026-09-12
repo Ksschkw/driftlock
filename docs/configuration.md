@@ -113,6 +113,18 @@ top_p = 1.0
 
 Recommended: `temperature = 0.0` for deterministic, cache-friendly verdicts.
 
+### `llm.timeout_seconds`
+
+Bounds a single LLM request, in seconds. Defaults to `60` when omitted (the
+same default applies to a missing or non-positive value). This exists so a
+provider that accepts a connection and then never answers cannot hang
+`git commit` forever.
+
+```toml
+[llm]
+timeout_seconds = 30
+```
+
 ### `[llm.prompts]` — prompt overrides (optional)
 
 Override the built-in prompts. Both fields are **Go `text/template`** strings and support `${ENV_VAR}` expansion.
