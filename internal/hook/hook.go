@@ -3,6 +3,7 @@ package hook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -42,6 +43,20 @@ type Options struct {
 	// JSON emits a machine-readable report to stdout instead of colored text.
 	JSON bool
 }
+
+// Sentinel errors returned by RunWith. The pipeline never exits the process
+// itself: it reports the decision and lets the command choose the exit code.
+// os.Exit inside the library skipped every defer (which is why the verdict
+// cache had to be saved by hand before each exit) and made the pipeline
+// impossible to exercise from a test.
+var (
+	// ErrDrift means mapped documentation is out of sync and blocking is
+	// enabled.
+	ErrDrift = errors.New("documentation drift detected")
+	// ErrLLMUnreachable means a check could not be completed and
+	// block_on_llm_error is enabled.
+	ErrLLMUnreachable = errors.New("documentation check incomplete: the LLM could not be reached")
+)
 
 type checkResult struct {
 	ok          bool
@@ -177,9 +192,9 @@ func RunWith(ctx context.Context, opts Options) error {
 		return fmt.Errorf("failed to create LLM provider: %w", err)
 	}
 
-	// NOTE: saved explicitly before every return/exit — os.Exit skips defers,
-	// and the blocked-commit path is exactly when fresh verdicts must persist
-	// (the retry after staging docs should hit the cache, not re-bill the LLM).
+	// Verdicts are persisted before RunWith returns so the retry after the
+	// author stages the updated docs hits the cache instead of re-billing the
+	// LLM. A blocked commit is exactly when a fresh verdict must survive.
 	verdictCache := cache.Load(root, cfg.Behavior.CacheEnabled())
 
 	var fullDiff string
@@ -380,23 +395,17 @@ func RunWith(ctx context.Context, opts Options) error {
 
 	// Blocking decisions.
 	if anyLLMError && cfg.Behavior.BlockOnLLMError {
-		if dryRun {
-			// `check` (and range mode) must fail loudly rather than exit;
-			// otherwise a provider outage silently passes a pull request.
-			return fmt.Errorf("documentation check incomplete: the LLM could not be reached")
-		}
-		os.Exit(1)
+		return ErrLLMUnreachable
 	}
 	if anyOutOfSync && cfg.Behavior.BlockOnFalse {
-		if dryRun {
-			return fmt.Errorf("documentation drift detected")
+		if !dryRun {
+			if noFix {
+				fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: documentation out of sync. Review the flagged issues and update docs manually.\n"))
+			} else {
+				fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: documentation out of sync. Review the updated files and stage them.\n"))
+			}
 		}
-		if noFix {
-			fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: documentation out of sync. Review the flagged issues and update docs manually.\n"))
-		} else {
-			fmt.Fprint(os.Stderr, output.RedStr("\nCommit blocked: documentation out of sync. Review the updated files and stage them.\n"))
-		}
-		os.Exit(1)
+		return ErrDrift
 	}
 	return nil
 }

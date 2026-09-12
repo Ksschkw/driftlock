@@ -3,6 +3,7 @@ package hook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -140,11 +141,8 @@ func TestEndToEndDriftIsDetected(t *testing.T) {
 	t.Chdir(dir)
 
 	err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head})
-	if err == nil {
-		t.Fatal("expected drift to be reported, got nil")
-	}
-	if !strings.Contains(err.Error(), "documentation drift detected") {
-		t.Errorf("unexpected error: %v", err)
+	if !errors.Is(err, ErrDrift) {
+		t.Fatalf("expected ErrDrift, got %v", err)
 	}
 
 	prompts := stub.prompts()
@@ -190,8 +188,8 @@ func TestEndToEndLLMErrorBlocks(t *testing.T) {
 	// Dry-run reports the error rather than exiting; range mode is inherently
 	// dry-run, so the pipeline returns instead of calling os.Exit.
 	err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head})
-	if err == nil {
-		t.Fatal("expected the run to fail when the provider errors and block_on_llm_error is set")
+	if !errors.Is(err, ErrLLMUnreachable) {
+		t.Fatalf("expected ErrLLMUnreachable, got %v", err)
 	}
 }
 
@@ -237,8 +235,8 @@ func TestEndToEndStrictLLMOverridesLenientConfig(t *testing.T) {
 	dir, base, head := driftFixture(t, srv.URL, false)
 	t.Chdir(dir)
 
-	if err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head}); err == nil {
-		t.Fatal("strict mode did not force a failure on provider error")
+	if err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head}); !errors.Is(err, ErrLLMUnreachable) {
+		t.Fatalf("expected ErrLLMUnreachable under strict mode, got %v", err)
 	}
 }
 

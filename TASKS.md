@@ -239,7 +239,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ## M5 — Architecture and testability
 
-- [ ] **M5.1 — Typed errors instead of `os.Exit`.** `internal/hook` calls
+- [x] **M5.1 — Typed errors instead of `os.Exit`.** `internal/hook` calls
   `os.Exit(1)`, which is why the cache save had to be hand-placed before every
   exit and why the pipeline is untestable. Return `ErrDrift`/`ErrLLM` and let
   `cmd/` choose the exit code.
@@ -453,3 +453,6 @@ deterministic string check does perfectly, instantly, and for free.
   Tests: `internal/hook/strict_test.go`, `TestEndToEndStrictLLMOverridesLenientConfig`,
   `TestEndToEndLenientConfigAllowsProviderError`; documented in README and
   docs/ci-cd.md.
+- **M5.1** — `internal/hook` no longer calls `os.Exit`; it returns sentinel
+  `ErrDrift` / `ErrLLMUnreachable` and lets `cmd/` choose the exit code, so
+  defers run and the pipeline is testable. Tests assert with `errors.Is`.
