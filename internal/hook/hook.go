@@ -63,6 +63,21 @@ type Report struct {
 	Results []DocResult `json:"results"`
 }
 
+// skipRequested reports whether DRIFTLOCK_SKIP asks Driftlock to stand down.
+//
+// The project's .env is loaded first, so the flag can be configured there as
+// well as in the shell. Previously the check ran BEFORE config loading — which
+// is where .env was read — so a `.env` containing `DRIFTLOCK_SKIP=true`
+// silently did nothing, and the only way to skip a commit was to export the
+// variable inline. LoadDotEnv never clobbers a variable already present in the
+// real environment, so a shell value still wins.
+func skipRequested() bool {
+	if root, err := config.FindProjectRoot(); err == nil {
+		config.LoadDotEnv(root)
+	}
+	return os.Getenv("DRIFTLOCK_SKIP") == "true"
+}
+
 // Run executes with default (staged, auto-fixing) options.
 func Run(ctx context.Context) error {
 	return RunWith(ctx, Options{})
@@ -78,7 +93,7 @@ func RunWithOptions(ctx context.Context, dryRun, noFix bool) error {
 // structural changes via the LLM (consulting the verdict cache first), and
 // optionally auto-fixes and blocks.
 func RunWith(ctx context.Context, opts Options) error {
-	if os.Getenv("DRIFTLOCK_SKIP") == "true" {
+	if skipRequested() {
 		return nil
 	}
 

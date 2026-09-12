@@ -153,7 +153,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ### M2.B — Environment and config plumbing
 
-- [ ] **M2.B.1 — Load `.env` before the `DRIFTLOCK_SKIP` check.**
+- [x] **M2.B.1 — Load `.env` before the `DRIFTLOCK_SKIP` check.**
   `hook.go` reads `DRIFTLOCK_SKIP` before `config.LoadProjectConfig()` loads
   `.env`, so a `.env`-configured skip silently does nothing. Load dotenv at the
   entry point.
@@ -324,3 +324,7 @@ deterministic string check does perfectly, instantly, and for free.
 - **M1.A.10** — Kotlin (`: T`), Swift (`-> T`), and Scala (`: T`) return types
   are part of the signature, with function-typed parameters tolerated. Tests:
   `internal/parser/jvm_test.go`.
+- **M2.B.1** — `RunWith` now calls `skipRequested()`, which loads the project
+  `.env` before reading `DRIFTLOCK_SKIP`. The repo's own `.env`
+  (`DRIFTLOCK_SKIP=true`) previously did nothing. First tests in
+  `internal/hook`: `skip_test.go`.
