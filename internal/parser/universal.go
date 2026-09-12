@@ -19,6 +19,14 @@ func extractSignatures(filePath, source string) []Signature {
 	sanitized := sanitize(source, spec)
 	ignored := ignoredLines(source, spec)
 
+	// Scope lookup is computed once per file. Brace counting runs on the
+	// SANITIZED source so a brace inside a string or comment cannot unbalance
+	// the depth.
+	var scopes map[int]string
+	if spec.scopePattern != nil {
+		scopes = computeScopes(sanitized, spec.scopePattern)
+	}
+
 	seen := make(map[string]bool)
 	var sigs []Signature
 
@@ -59,6 +67,9 @@ func extractSignatures(filePath, source string) []Signature {
 				}
 			}
 			sig := tidySignature(origSlice)
+			if scope, ok := scopes[startLine]; ok && scope != "" {
+				name = scope + "." + name
+			}
 			key := name + "\x00" + sig
 			if seen[key] {
 				continue
@@ -100,6 +111,49 @@ func isStatementStart(span string) bool {
 		return true
 	}
 	return false
+}
+
+// computeScopes maps each 1-based line number inside a scope-opening block to
+// the scope name captured from that block's declaration. It is used for Rust
+// `impl` blocks so `A::build` and `B::build` are distinct symbols rather than
+// two identical `build` signatures that collapse into one.
+//
+// Depth is counted on sanitized source (comments and strings blanked). The
+// declaration line itself is excluded so the impl declaration is not qualified
+// with its own name.
+func computeScopes(sanitized string, re *regexp.Regexp) map[int]string {
+	out := make(map[int]string)
+	for _, loc := range re.FindAllStringSubmatchIndex(sanitized, -1) {
+		if loc[2] < 0 || loc[3] <= loc[2] {
+			continue
+		}
+		name := sanitized[loc[2]:loc[3]]
+		open := strings.IndexByte(sanitized[loc[1]:], '{')
+		if open < 0 {
+			continue
+		}
+		open += loc[1]
+
+		depth := 0
+		end := len(sanitized)
+	scan:
+		for i := open; i < len(sanitized); i++ {
+			switch sanitized[i] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					end = i
+					break scan
+				}
+			}
+		}
+		for line := lineOf(sanitized, open) + 1; line <= lineOf(sanitized, end); line++ {
+			out[line] = name
+		}
+	}
+	return out
 }
 
 // groupAt returns capture group n (1-based) from a FindStringSubmatch-style

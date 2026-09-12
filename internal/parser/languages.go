@@ -40,6 +40,11 @@ type langSpec struct {
 	// brace/semicolon truncation is skipped, because a '{' or ';' can legally
 	// appear inside a parameter default (`def f(x: dict = {})`).
 	indentDelimited bool
+	// scopePattern, when set, identifies block-opening declarations whose body
+	// gives an enclosing scope (Rust `impl`). Signatures inside such a block
+	// are qualified as `Scope.Name` so same-named methods on different types
+	// stay distinguishable.
+	scopePattern *regexp.Regexp
 	// dataLike marks structured-data languages (YAML/JSON/TOML/XML/Markdown)
 	// whose "structure" lives in keys/tags/headings rather than code
 	// signatures. String/comment stripping is skipped for these because the
@@ -112,8 +117,15 @@ var (
 	// pRustFn includes the optional return type (`-> Result<(), Error>`) and a
 	// trailing `where` clause. The return type was omitted previously, so
 	// changing `-> i32` to `-> String` produced no structural change at all.
-	pRustFn   = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:const\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*` + rustParamList + `\s*(?:->\s*[^;{]+)?(?:\s*where\s+[^{;]+)?\s*\{?`)
-	pRustType = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(struct|enum|trait|union|impl|type)\s+(\w+)`)
+	pRustFn = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:const\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*` + rustParamList + `\s*(?:->\s*[^;{]+)?(?:\s*where\s+[^{;]+)?\s*\{?`)
+	// pRustType covers data/trait declarations only; `impl` is handled
+	// separately because a generic or trait impl (`impl<T> Trait for Type`)
+	// names the TYPE after `for`, not the token right after `impl`.
+	pRustType = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(struct|enum|trait|union|type)\s*(?:<[^>]*>)?\s+(\w+)`)
+
+	// pRustImpl matches an inherent or trait impl block and captures the type
+	// being implemented, so `impl<T> Store<T> for Foo<T>` scopes to Foo.
+	pRustImpl = regexp.MustCompile(`(?m)^[\t ]*(?:unsafe\s+)?impl\s*(?:<[^>]*>)?\s+(?:(?:[\w:]+(?:<[^>]*>)?)\s+for\s+)?(\w+)`)
 
 	pArrowFn  = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*(?::\s*[^=]+)?=\s*(?:async\s+)?\(?([^)=]*)\)?\s*=>`)
 	pFuncKw   = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(\w+)\s*\(([\s\S]*?)\)`)
@@ -229,7 +241,8 @@ var registry = map[string]langSpec{
 	"rust": {
 		name: "rust", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []pattern{pat(pRustFn, 1), pat(pRustType, 2)},
+		patterns:     []pattern{pat(pRustFn, 1), pat(pRustType, 2), pat(pRustImpl, 1)},
+		scopePattern: pRustImpl,
 	},
 	"swift": {
 		name: "swift", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},

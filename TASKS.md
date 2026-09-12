@@ -87,7 +87,7 @@ exists to prevent. **This milestone is the highest priority.**
   the return type (and tolerate `where` clauses).
   *Accept:* a Rust return-type change produces one `modified` change.
 
-- [ ] **M1.A.9 — Rust `impl` methods and generic impls.**
+- [x] **M1.A.9 — Rust `impl` methods and generic impls.**
   Qualify methods declared inside `impl Type` blocks so same-named methods on
   different types are distinguishable, and accept `impl<T> Trait for Type`.
   *Accept:* two `impl` blocks with a same-named method yield two symbols.
@@ -350,3 +350,8 @@ deterministic string check does perfectly, instantly, and for free.
   whether the commit proceeded UNCHECKED or was blocked, and gives remediation
   (`block_on_llm_error`, `timeout_seconds`, `DRIFTLOCK_DEBUG`). Tests:
   `internal/hook/message_test.go`.
+- **M1.A.9** — Rust methods inside `impl` blocks are qualified by type
+  (`A.build`, `B.build`) via a new `scopePattern` + `computeScopes` brace
+  scan, and generic/trait impls (`impl<T> Trait for Foo<T>`) parse. Tests:
+  `TestRustImplMethodsAreScopedByType`, `TestRustGenericTraitImplScope`,
+  `TestRustFreeFunctionStaysUnqualified`.
