@@ -1,0 +1,4 @@
+Repo	class Repo
+all	public function all(): array
+find	function find(): ?string
+get	function get(): int

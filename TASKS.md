@@ -116,6 +116,11 @@ exists to prevent. **This milestone is the highest priority.**
   the element type is invisible. *Accept:* the full type expression is part of
   the signature for map/slice/chan/array types.
 
+- [x] **M1.A.14 — PHP return types.** Found while verifying the docs during
+  M7.4: `function get(): int` changing to `: string` produced **no** change,
+  because pPhpFunc stopped at the parameter list. *Accept:* a PHP return-type
+  change registers as one `modified`.
+
 ### M1.B — Symbol identity (overloads and same-named methods)
 
 - [x] **M1.B.1 — Dedup by name+signature, not bare name.**
@@ -489,6 +494,10 @@ deterministic string check does perfectly, instantly, and for free.
   `internal/hook/deterministic_pipeline_test.go` (auto skips for added, uses the
   model for modified; deterministic works with no `[llm]` section; llm always
   calls the model).
+- **M1.A.14** — PHP return types (`: int`, `: ?string`, `: int|string`) are now
+  part of the signature, found while verifying the docs during M7.4. Tests:
+  `internal/parser/php_test.go`, `TestPhpReturnTypeChangeIsModified`; corpus
+  sample `regression_php_returns.php`.
 - **M6.4** — `check_mode` documented in README, docs/configuration.md,
   docs/architecture.md (new pipeline stage + invariant), docs/caching.md (a
   "deterministic-first" cost section), and `.driftlock.example.toml`.

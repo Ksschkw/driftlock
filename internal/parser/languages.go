@@ -212,8 +212,11 @@ var (
 	pShellFunc = regexp.MustCompile(`(?m)^[\t ]*(?:function\s+)?([\w-]+)\s*\(\)\s*\{`)
 	pLuaFunc   = regexp.MustCompile(`(?m)(?:^|\blocal\s+)function\s+([\w.:]+)\s*\(([^)]*)\)`)
 	pDefn      = regexp.MustCompile(`\(\s*defn-?\s+([\w\-!?*]+)`)
-	pPhpFunc   = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|protected|static|final|abstract)\s+)*function\s+(\w+)\s*\(([\s\S]*?)\)`)
-	pRubyDef   = regexp.MustCompile(`(?m)^[\t ]*def\s+([\w.]+[?!=]?)`)
+	// pPhpFunc includes the optional return type (`: int`, `: ?string`,
+	// `: int|string`). PHP 7+ declares it inline and it was previously dropped,
+	// so a return-type-only change produced no structural change.
+	pPhpFunc = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|protected|static|final|abstract)\s+)*function\s+(\w+)\s*` + paramListNoSemi + `\s*(?::\s*[^;{]+)?`)
+	pRubyDef = regexp.MustCompile(`(?m)^[\t ]*def\s+([\w.]+[?!=]?)`)
 
 	// Data / markup patterns.
 	pSQL      = regexp.MustCompile(`(?i)\bCREATE\s+(?:OR\s+REPLACE\s+)?(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER|INDEX|MATERIALIZED\s+VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?[` + "`" + `"']?(\w+)`)

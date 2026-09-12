@@ -204,3 +204,17 @@ impl B {
 		t.Errorf("formatted diff does not name the removed symbol: %q", out)
 	}
 }
+
+// A PHP return-type change must register as one modified signature.
+func TestPhpReturnTypeChangeIsModified(t *testing.T) {
+	oldSrc := "<?php\nfunction get(): int { return 1; }\n"
+	newSrc := "<?php\nfunction get(): string { return \"\"; }\n"
+	changes := ExtractStructuralChanges("api.php", oldSrc, newSrc)
+	got := changeByKind(changes, "modified")
+	if len(got) != 1 {
+		t.Fatalf("expected 1 modified for a PHP return-type change, got %v", changes)
+	}
+	if !strings.Contains(got[0].NewSig, ": string") {
+		t.Errorf("modified signature does not show the new return type: %q", got[0].NewSig)
+	}
+}
