@@ -98,6 +98,16 @@ well, even if the docs never mentioned it before – Driftlock will ask the LLM
 to create appropriate documentation. A **rename** shows up as one *removed* plus
 one *added* symbol.
 
+Return types are part of the signature where the language declares them inline:
+Go, Python (`-> T`), Rust (`-> T` plus `where` clauses), Kotlin/Scala (`: T`),
+Swift (`-> T`), Java/C#/TypeScript, and PHP (`: T`). Go generics (`func Map[T any](…)`,
+`type Stack[T any] struct`), generic receivers, and Go type expressions such as
+`map[K]V` are compared in full.
+
+**Private declarations are skipped.** Go requires an uppercase initial, Python
+rejects a leading underscore, and Rust requires `pub`. A rename or signature
+change to an internal helper therefore never triggers a documentation check.
+
 **Non‑triggers:** modifying a function body, renaming a local variable, adding
 a comment, or changing whitespace/formatting. You can also explicitly exclude a
 symbol with a [`driftlock:ignore`](#ignoring-symbols) annotation.

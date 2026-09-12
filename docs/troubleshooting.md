@@ -73,8 +73,11 @@ and matches public (exported) signatures. A few consequences:
 - **A symbol wasn't detected.** Confirm the file's extension is recognized (see
   the language list in [Architecture](./architecture.md)). Unknown extensions
   fall back to a conservative universal parser that may not catch exotic
-  syntax. For lowercase-public languages (Python, Rust) a leading underscore
-  marks a symbol private and it is skipped.
+  syntax. Private declarations are skipped by design: Go requires an uppercase
+  initial, Python rejects a leading underscore (so `_helper` and `__init__` are
+  excluded), and Rust requires `pub`. If a genuinely public symbol is missing,
+  set `report_unparsed = true` (or `DRIFTLOCK_DEBUG=1`) to have Driftlock report
+  files that produced no signatures at all.
 - **A symbol was flagged that you consider internal.** Exclude it with a
   [`driftlock:ignore`](./ignoring.md) annotation, or scope your `doc_mapping`
   `sources` so that file isn't watched.

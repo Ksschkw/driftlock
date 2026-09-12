@@ -279,7 +279,7 @@ deterministic string check does perfectly, instantly, and for free.
 - [x] **M7.3 — Solana honesty.** `~` is never expanded in `keypair_path`, and
   `program_id` is documented but always errors. Implement or clearly mark
   unsupported.
-- [ ] **M7.4 — Docs sync.** Align README/docs with actual parser coverage
+- [x] **M7.4 — Docs sync.** Align README/docs with actual parser coverage
   (return types per language, multi-line generics) and add this roadmap to the
   docs index.
 - [ ] **M7.5 — Build artifacts.** Document the release process; keep the tree
@@ -515,3 +515,7 @@ deterministic string check does perfectly, instantly, and for free.
   explicitly, the submission is bounded by a 30s timeout, and `program_id` is
   refused with an explanation that only Memo is supported. Tests:
   `internal/audit/solana_test.go`; docs updated.
+- **M7.4** — Docs aligned with real parser coverage: per-language return types,
+  Go generics/type expressions, visibility filtering, and the `report_unparsed`
+  diagnostic. `docs/index.md` links this roadmap. Verifying the claim uncovered
+  and fixed M1.A.14 (PHP return types).

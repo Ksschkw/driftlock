@@ -26,6 +26,7 @@ Adopt it gradually with report-only mode, then flip it to blocking once your doc
 | [Caching](./caching.md) | How the content-addressed verdict cache works, where it lives, and when it invalidates. |
 | [Architecture](./architecture.md) | The end-to-end pipeline, package layout, and key design invariants. |
 | [Releasing](./releasing.md) | How releases are built, versioned, and checksummed. |
+| [Roadmap / hardening plan](../TASKS.md) | The milestone plan behind the current parser, gate, init, CI, and architecture work, with live status. |
 | [Troubleshooting](./troubleshooting.md) | Fixes for blocked commits, LLM errors, parser surprises, CI ref problems, and cache staleness. |
 
 ## Command summary

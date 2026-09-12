@@ -117,6 +117,8 @@ Driftlock parses **any language** through per-language regex extractors, with th
 2. **Comment- and string-stripped first.** Before any pattern runs, comments and string literals are removed, so a signature-looking token inside a comment or a string never produces a phantom signature.
 3. **Multi-line aware.** Signatures spread across several lines (long parameter lists, multi-line generics) are matched as a unit.
 
+Return types are included where the language declares them inline (Go, Python, Rust, Kotlin, Swift, Scala, Java, C#, TypeScript, PHP), and closures or function-typed parameters do not truncate the parameter list. See [Visibility filtering](#parser) for which declarations are considered public.
+
 Supported languages include Go, Python, JavaScript/TypeScript, Java, C#, C/C++, Rust, Swift, Kotlin, Scala, PHP, Ruby, Shell/Bash, Lua, Clojure, and SQL (`CREATE TABLE`/`VIEW`/…), plus data and markup formats: YAML, JSON, TOML/INI, XML/HTML, and Markdown.
 
 ### Visibility filtering
