@@ -1,6 +1,9 @@
 package diff
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func changeByKind(changes []StructuralChange, kind string) []StructuralChange {
 	var out []StructuralChange
@@ -56,5 +59,20 @@ func TestRenameIsRemoveAndAdd(t *testing.T) {
 	changes := ExtractStructuralChanges("p.go", oldSrc, newSrc)
 	if len(changeByKind(changes, "added")) != 1 || len(changeByKind(changes, "removed")) != 1 {
 		t.Errorf("rename should be one add + one remove, got %v", changes)
+	}
+}
+
+// A Python return-annotation change must register as one modified signature.
+// Previously the annotation was not part of the signature, so this was silent.
+func TestPythonReturnTypeChangeIsModified(t *testing.T) {
+	oldSrc := "def parse(text: str) -> int:\n    return 1\n"
+	newSrc := "def parse(text: str) -> str:\n    return \"x\"\n"
+	changes := ExtractStructuralChanges("parse.py", oldSrc, newSrc)
+	got := changeByKind(changes, "modified")
+	if len(got) != 1 {
+		t.Fatalf("expected 1 modified for a return-type change, got %v", changes)
+	}
+	if !strings.Contains(got[0].NewSig, "-> str") {
+		t.Errorf("modified signature does not show the new return type: %q", got[0].NewSig)
 	}
 }

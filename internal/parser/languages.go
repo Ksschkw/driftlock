@@ -86,7 +86,10 @@ var (
 	// Go type declarations, including generic ones (`type Stack[T any] struct`).
 	pGoType = regexp.MustCompile(`(?m)^[\t ]*type\s+(\w+)(?:\s*\[[^\]]*\])?\s+(struct|interface|func|map|\[|chan|\w)`)
 
-	pPyDef   = regexp.MustCompile(`(?m)^[\t ]*(?:async\s+)?def\s+(\w+)\s*\(([\s\S]*?)\)`)
+	// pPyDef includes an optional return annotation (`-> int`). It was omitted
+	// previously, so changing a Python return type produced no structural
+	// change at all.
+	pPyDef   = regexp.MustCompile(`(?m)^[\t ]*(?:async\s+)?def\s+(\w+)\s*\(([\s\S]*?)\)\s*(?:->\s*[^:\n]+)?`)
 	pPyClass = regexp.MustCompile(`(?m)^[\t ]*class\s+(\w+)`)
 
 	pRustFn   = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:const\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*\(([\s\S]*?)\)`)

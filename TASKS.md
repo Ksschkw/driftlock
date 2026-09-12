@@ -71,7 +71,7 @@ exists to prevent. **This milestone is the highest priority.**
   *Accept:* package-private and interface methods are extracted; calls and
   `return` statements are not.
 
-- [ ] **M1.A.6 — Python return annotations.**
+- [x] **M1.A.6 — Python return annotations.**
   `-> int` changing to `-> str` currently produces **zero** changes because
   the signature truncates at `)`. Include the return annotation.
   *Accept:* a return-annotation change produces one `modified` change.
@@ -302,3 +302,6 @@ deterministic string check does perfectly, instantly, and for free.
   `pJavaCtor`, `pCSharpProperty`, and a generic `isStatementStart` guard so
   `return foo(a);` is never read as a declaration. Reused the shared
   `paramListNoSemi`. Tests: `internal/parser/java_test.go`.
+- **M1.A.6** — Python return annotations (`-> T`) are now part of the
+  signature, so a return-type change registers as one `modified`. Tests:
+  `internal/parser/python_test.go`, `TestPythonReturnTypeChangeIsModified`.
