@@ -152,3 +152,63 @@ func TestInstallHookBacksUpForeignHook(t *testing.T) {
 		t.Errorf("first install did not append driftlock: %q", modified)
 	}
 }
+
+// Running the installer twice must not append a second Driftlock block. A
+// duplicated block would run the check twice on every commit.
+func TestInstallHookIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+
+	if _, err := installPreCommitHook(dir); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	first := readFile(t, hookPath)
+
+	notes, err := installPreCommitHook(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !anyNoteContains(notes, "already contains") {
+		t.Errorf("second install did not report idempotency: %v", notes)
+	}
+	second := readFile(t, hookPath)
+	if first != second {
+		t.Errorf("hook changed on re-install:\n--- first ---\n%s\n--- second ---\n%s", first, second)
+	}
+	if n := strings.Count(second, driftlockHookBegin); n != 1 {
+		t.Errorf("driftlock marker appears %d times, want 1:\n%s", n, second)
+	}
+}
+
+// The same guard applies to a chained foreign hook.
+func TestInstallHookIsIdempotentWithForeignHook(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+	hooksDirPath := filepath.Join(dir, ".git", "hooks")
+	if err := os.MkdirAll(hooksDirPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDirPath, "pre-commit")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho custom\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := installPreCommitHook(dir); err != nil {
+		t.Fatal(err)
+	}
+	first := readFile(t, hookPath)
+	if _, err := installPreCommitHook(dir); err != nil {
+		t.Fatal(err)
+	}
+	second := readFile(t, hookPath)
+	if first != second {
+		t.Errorf("foreign hook changed on re-install:\n--- first ---\n%s\n--- second ---\n%s", first, second)
+	}
+	if n := strings.Count(second, driftlockHookBegin); n != 1 {
+		t.Errorf("driftlock marker appears %d times, want 1", n)
+	}
+	if !strings.Contains(second, "echo custom") {
+		t.Errorf("foreign content lost on re-install:\n%s", second)
+	}
+}

@@ -122,6 +122,12 @@ func installPreCommitHook(root string) ([]string, error) {
 		return nil, fmt.Errorf("failed to read existing hook: %w", err)
 	}
 
+	// Idempotent: if Driftlock's block is already present, leave the file
+	// byte-for-byte alone rather than appending a second copy.
+	if strings.Contains(string(existing), driftlockHookBegin) {
+		return []string{"Pre-commit hook already contains Driftlock at " + hookPath + "; left unchanged"}, nil
+	}
+
 	if len(existing) == 0 {
 		if err := os.WriteFile(hookPath, []byte(freshHookScript()), 0o755); err != nil {
 			return nil, fmt.Errorf("failed to write hook script: %w", err)

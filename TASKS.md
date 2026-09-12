@@ -212,7 +212,7 @@ exists to prevent. **This milestone is the highest priority.**
   to a foreign hook (husky, lint-staged, pre-commit) instead of overwriting it.
 - [x] **M3.3 — Back up before modifying.** Preserve the original as
   `pre-commit.driftlock-backup` with a printed note.
-- [ ] **M3.4 — Idempotent re-init.** A second `init` must not double-install or
+- [x] **M3.4 — Idempotent re-init.** A second `init` must not double-install or
   destroy its own prior work.
 - [ ] **M3.5 — PATH detection.** Warn when `driftlock` is not resolvable,
   since the hook shells out to it.
@@ -417,3 +417,6 @@ deterministic string check does perfectly, instantly, and for free.
 - **M3.3** — The original hook is copied to `pre-commit.driftlock-backup` once,
   and a re-run never overwrites that true original. Test:
   `TestInstallHookBacksUpForeignHook`.
+- **M3.4** — Install is idempotent: the `# driftlock:begin` marker is detected
+  and the file is left byte-for-byte unchanged. Tests:
+  `TestInstallHookIsIdempotent`, `TestInstallHookIsIdempotentWithForeignHook`.
