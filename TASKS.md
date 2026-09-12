@@ -284,11 +284,11 @@ deterministic string check does perfectly, instantly, and for free.
   docs index.
 - [x] **M7.5 — Build artifacts.** Document the release process; keep the tree
   free of ~75 MB of committed-by-accident binaries.
-- [!] **M7.6 — License decision.** BUSL-1.1 with `Change Date: 2099-12-31` is
-  off-spec (BUSL caps at four years) and reads as "never open source", which is
-  a hard blocker for adoption of a per-repo developer tool. **BLOCKED ON A
-  MAINTAINER DECISION.** Recorded in `docs/licensing.md` with the options and a
-  recommendation; `LICENSE` itself is deliberately unchanged.
+- [x] **M7.6 — License decision.** **DECIDED: open core.** The core CLI and
+  libraries are now Apache-2.0 (`LICENSE`), with attribution and the
+  commercial-surface boundary in `NOTICE`; `docs/licensing.md` records the
+  decision, the defects in the previous BUSL-1.1 parameters, and the options
+  considered.
 
 ---
 
@@ -304,13 +304,8 @@ deterministic string check does perfectly, instantly, and for free.
 
 ## Open decisions
 
-- **M7.6 (licence).** The repository ships BUSL-1.1 with `Change Date:
-  2099-12-31`. The change date is off-spec (BUSL caps at four years, and the
-  licence text itself says the fourth anniversary applies "whichever comes
-  first"), and the README's "non-commercial" wording does not match the
-  Additional Use Grant. `docs/licensing.md` lays out four options and a
-  recommendation. This is the only planned micro-milestone that cannot be
-  completed by an engineering change alone.
+None. The licence question (M7.6) was the only item requiring a maintainer
+decision; it was resolved in favour of Apache-2.0 with an open-core model.
 
 ## Progress log
 
@@ -530,6 +525,9 @@ deterministic string check does perfectly, instantly, and for free.
   Go generics/type expressions, visibility filtering, and the `report_unparsed`
   diagnostic. `docs/index.md` links this roadmap. Verifying the claim uncovered
   and fixed M1.A.14 (PHP return types).
+- **M7.6** — Licence resolved: Apache-2.0 core with an open-core boundary
+  (`LICENSE`, `NOTICE`, README, `docs/licensing.md`). Recorded rather than
+  changed unilaterally; the maintainer chose open core.
 - **M7.5** — Removed the ~78 MB of stale platform binaries and `checksums.txt`
   from the working tree (all were gitignored, none tracked), left `dist/` as the
   documented build output, built a current `dist/driftlock` and verified

@@ -1,72 +1,52 @@
-# Licensing: a decision brief
+# Licensing
 
-**Status: awaiting a maintainer decision. Nothing has been changed.**
+**Decided: the project is Apache-2.0 with an open-core model.**
 
-The `LICENSE` file is Business Source License 1.1 with these parameters:
+The CLI and libraries in this repository are licensed under the Apache License,
+Version 2.0 (see [LICENSE](../LICENSE)). You may use, modify, self-host, and
+redistribute them freely, including commercially and inside an organisation, and
+you may build products on top of them.
 
-| Parameter | Value |
+Optional commercial offerings operated by the copyright holder — for example a
+hosted service or a team management surface — are separate products under
+separate terms. They are not required to use, build, or self-host anything here.
+[NOTICE](../NOTICE) records the attribution and that boundary.
+
+## Why
+
+Driftlock is a CLI that a team installs on every developer machine and in CI,
+and that runs inside a git hook. Tools in that position appear in a
+legal/security review before they appear in a build, so permissive licensing is
+doing real product work: it removes the review friction that would otherwise
+stop the tool being adopted at all.
+
+## What changed, and why
+
+The project previously shipped the Business Source License 1.1 with
+`Change Date: 2099-12-31`, which had three concrete defects:
+
+1. **The change date was off-spec.** BUSL 1.1 caps the change date at four years
+   from a version's first public distribution — the licence text itself said the
+   fourth anniversary applies "whichever comes first" — so the stated date did
+   not do what it appeared to do, while reading to a reviewer as "never becomes
+   open source".
+2. **The README and the grant disagreed.** The README described use as free for
+   "any non-commercial purpose", which did not match the broader Additional Use
+   Grant.
+3. **It was a promise no reviewer would rely on**, which is the opposite of what
+   a licence is for.
+
+## Options considered
+
+| Option | Outcome |
 | --- | --- |
-| Licensor | Okafor Kosisochukwu Johpaul |
-| Licensed Work | Driftlock |
-| Additional Use Grant | Any purpose including production, except offering the Licensed Work as a standalone hosted service (SaaS) or a derivative that directly competes with the official service |
-| Change Date | **2099-12-31** |
-| Change License | MIT |
+| **Apache-2.0 (chosen, as open core)** | Maximum adoption for the core CLI; explicit patent grant; monetisation moves to optional hosted/team offerings. |
+| MIT | Equivalent adoption, no explicit patent grant. |
+| BUSL-1.1 with a correct 4-year change date | Source-available; still blocked by some corporate policies. |
+| Keep BUSL-1.1 as it was | Rejected: off-spec date plus ambiguous README. |
 
-## Why this matters for this particular product
+## Notes for contributors
 
-Driftlock is not a library a developer imports; it is a CLI that a team must
-install on every developer machine and in CI, and it runs inside a git hook. That
-means:
-
-- it appears in a legal/security review before it appears in a build;
-- every engineer who clones the repository is expected to install it;
-- CI configuration referencing it is committed to the repository.
-
-For tools in that position, source-available restrictions are a much larger
-adoption tax than they are for a server-side dependency. A permissive license is
-therefore doing real product work, not just being generous.
-
-## Problems with the current parameters
-
-1. **The change date is off-spec.** BUSL 1.1 caps the change date at four years
-   from the first public distribution of each version; the license text in this
-   repository says exactly that ("Effective on the Change Date, or the fourth
-   anniversary of the first publicly available distribution of a specific
-   version of the Licensed Work under this License, whichever comes first").
-   A `2099-12-31` change date therefore does not do what it appears to do — the
-   fourth-anniversary clause governs — while reading to a reviewer as "never
-   becomes open source". That is the worst of both worlds.
-
-2. **The README and the grant disagree.** The README says use is free "for any
-   non-commercial purpose, including personal use and internal use within an
-   organisation". The Additional Use Grant here is broader than that (it permits
-   production use, not just non-commercial use) but is buried under BUSL's
-   default "non-production use" language. A reader cannot tell which applies.
-
-3. **"Automatically become MIT on 2099-12-31"** is stated in the README as a
-   feature. It is not one; it is a promise no reviewer will rely on.
-
-## Options
-
-| Option | What it means | Cost |
-| --- | --- | --- |
-| **A. MIT or Apache-2.0** | Maximum adoption. Anyone can use, modify, and embed it, including in commercial products. | No licensing leverage if a paid product is planned. |
-| **B. BUSL-1.1 with a 4-year change date** | Source-available; converts to MIT/Apache four years after each release. | Still blocked by some corporate policies, and needs careful per-version dating. |
-| **C. Open core** | Permissive core (MIT/Apache), commercial offering around it (hosted service, team dashboard, policy management). | Requires a commercial product to actually exist to be meaningful. |
-| **D. Keep as-is** | No change. | Off-spec change date plus ambiguous README; not recommended. |
-
-## Recommendation
-
-For a commit-hook CLI whose value depends on being installed everywhere, **A** or
-**C**. If monetisation is planned, **C** gives both: the hook itself stays
-permissive, which is what drives adoption, and the paid surface is the hosted
-service rather than the binary.
-
-If **D** is chosen deliberately, at minimum fix the change date to a real date
-within four years and align the README wording with the Additional Use Grant.
-
-## What has been done here
-
-Nothing in `LICENSE` or `README.md` has been modified. This brief records the
-issue, the options, and a recommendation so the decision can be made quickly and
-in one place. `TASKS.md` tracks the item as blocked on this decision.
+Contributions are accepted under the Apache License, Version 2.0 (section 5 of
+the licence: a contribution intentionally submitted for inclusion is under the
+same terms unless explicitly stated otherwise). No separate CLA is in place.

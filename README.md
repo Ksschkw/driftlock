@@ -427,18 +427,15 @@ design invariants.
 
 ## License
 
-Driftlock is licensed under the **Business Source License 1.1 (BUSL‑1.1)**.
-You may use, modify, and distribute the software freely for any non‑commercial
-purpose, including personal use and internal use within an organisation.
+Driftlock is licensed under the **Apache License, Version 2.0**. You may use,
+modify, self-host, and redistribute it freely — including commercially and
+inside your organisation — and you may build products on top of it.
 
-**Hosting Driftlock as a service (SaaS) or building a directly competing**
-**product requires a separate commercial license.**
+This is an **open-core** project: everything in this repository is permissively
+licensed. Optional commercial offerings operated by the maintainer, such as a
+hosted service or a team management surface, are separate products under
+separate terms and are not required to use anything here.
 
-The BUSL‑1.1 will automatically become MIT on **2099‑12‑31**.
-
-If you need a commercial license for a prohibited use case, contact
-`kookafor893@gmail.com`.
-
-Full license text: [LICENSE](./LICENSE)
+Full license text: [LICENSE](./LICENSE) · attributions: [NOTICE](./NOTICE)
 
 ---
