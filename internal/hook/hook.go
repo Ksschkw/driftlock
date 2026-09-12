@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/Ksschkw/driftlock/internal/llm"
 	"github.com/Ksschkw/driftlock/internal/llm/types"
 	"github.com/Ksschkw/driftlock/internal/output"
+	"github.com/Ksschkw/driftlock/internal/parser"
 	"github.com/Ksschkw/driftlock/internal/updater"
 )
 
@@ -61,6 +63,10 @@ type Report struct {
 	Mode    string      `json:"mode"` // staged | range
 	Drift   bool        `json:"drift"`
 	Results []DocResult `json:"results"`
+	// Unparsed lists mapped source files that produced no structural
+	// signatures, so a consumer can distinguish "nothing changed" from
+	// "we could not read this file".
+	Unparsed []string `json:"unparsed,omitempty"`
 }
 
 // skipRequested reports whether DRIFTLOCK_SKIP asks Driftlock to stand down.
@@ -137,6 +143,16 @@ func RunWith(ctx context.Context, opts Options) error {
 			printJSON(Report{Mode: mode})
 		}
 		return nil
+	}
+
+	unparsed := unparsedSources(docMap, files, newContentOf)
+	if len(unparsed) > 0 && (cfg.Behavior.ReportUnparsed || os.Getenv("DRIFTLOCK_DEBUG") != "") {
+		for _, src := range unparsed {
+			if !opts.JSON {
+				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf(
+					"driftlock: no structural signatures found in %s; it may use syntax the extractor does not understand. Use driftlock:ignore or narrow doc_mapping if this is expected.\n", src)))
+			}
+		}
 	}
 
 	provider, err := llm.NewProvider(cfg.LLM, cfg.LLM.Prompts)
@@ -328,6 +344,7 @@ func RunWith(ctx context.Context, opts Options) error {
 	}
 
 	report.Drift = anyOutOfSync
+	report.Unparsed = unparsed
 
 	if opts.JSON {
 		printJSON(report)
@@ -390,6 +407,41 @@ func llmErrorMessage(failedDocs []string, blocked bool) string {
 func mergeFix(fullDoc, updatedSections string) (string, bool) {
 	merged := docman.MergeSectionUpdates(fullDoc, updatedSections)
 	return merged, merged != fullDoc
+}
+
+// unparsedSources returns the mapped source files whose new content produced
+// no structural signatures at all. Those are the files where Driftlock's
+// silence is ambiguous: either nothing changed, or the extractor could not read
+// the file. Reporting them makes the silence meaningful.
+func unparsedSources(docMap map[string][]string, files []string, newContentOf func(string) string) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, sources := range docMap {
+		for _, src := range sources {
+			if seen[src] || !contains(files, src) {
+				continue
+			}
+			seen[src] = true
+			content := newContentOf(src)
+			if !looksLikeCode(content) {
+				continue
+			}
+			if len(parser.ExtractSignatures(src, content)) == 0 {
+				out = append(out, src)
+			}
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// looksLikeCode is a deliberately loose heuristic that keeps the unparsed-file
+// diagnostic from firing on short or data-only files.
+func looksLikeCode(content string) bool {
+	if len(content) < 20 || !strings.Contains(content, "(") {
+		return false
+	}
+	return strings.Count(content, "\n") >= 2
 }
 
 // readDocForCheck returns the documentation content the check should judge.

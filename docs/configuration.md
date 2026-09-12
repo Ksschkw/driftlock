@@ -177,6 +177,7 @@ Controls how Driftlock acts once drift is detected.
 | `max_retries` | int | `2` | Number of LLM retries on transient failure, using exponential backoff. |
 | `include_full_diff` | bool | `false` | Send the **full git diff** to the LLM instead of only the structural signature changes. More context, but more tokens. |
 | `cache` | bool | `true` | Enable the content-addressed verdict cache (`.driftlock/cache.json`). Identical `(model, diff, doc)` checks are never re-sent to the LLM. **On by default.** |
+| `report_unparsed` | bool | `false` | Warn when a mapped source file yields no structural signatures at all, which usually means the extractor did not understand it. Also always shown with `DRIFTLOCK_DEBUG=1`. |
 
 ### Notes
 

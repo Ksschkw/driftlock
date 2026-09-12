@@ -151,7 +151,7 @@ exists to prevent. **This milestone is the highest priority.**
   types, overloads, dict defaults, same-name methods).
   *Accept:* reverting any fix turns a test red.
 
-- [ ] **M1.C.3 — Parse diagnostics.**
+- [x] **M1.C.3 — Parse diagnostics.**
   When a mapped source file yields zero signatures but is non-trivial, report
   it (debug channel, and optionally a `--strict` warning) so silence is
   meaningful instead of ambiguous.
@@ -397,3 +397,7 @@ deterministic string check does perfectly, instantly, and for free.
 - **M1.C.2** — 12 minimal `regression_*` corpus files, one per finding, plus
   `testdata/README.md` mapping every finding to its sample and asserting test.
   The harness skips `README*` so documentation can live beside the corpus.
+- **M1.C.3** — `unparsedSources` reports mapped source files that produce no
+  structural signatures, via `[behavior] report_unparsed` (default off) or
+  `DRIFTLOCK_DEBUG=1`, and in the JSON report as `unparsed`. Silence is now
+  distinguishable from "could not parse". Tests: `internal/hook/unparsed_test.go`.

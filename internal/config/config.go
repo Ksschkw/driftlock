@@ -68,6 +68,11 @@ type BehaviorConfig struct {
 	// re-billing the LLM for identical (model, diff, doc) checks across
 	// commit amends, rebases, and CI re-runs. Enabled by default.
 	Cache *bool `toml:"cache"`
+	// ReportUnparsed warns when a mapped source file yields no structural
+	// signatures at all, which usually means the extractor did not understand
+	// it. Off by default because a file that legitimately declares nothing is
+	// common; the warning is always available through DRIFTLOCK_DEBUG.
+	ReportUnparsed bool `toml:"report_unparsed"`
 }
 
 // CacheEnabled reports whether the verdict cache is on. It defaults to true

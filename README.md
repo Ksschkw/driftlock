@@ -202,6 +202,7 @@ cache = true
 - `max_retries` – number of retries with exponential backoff.
 - `include_full_diff` – if `true`, sends the complete `git diff` to the LLM (uses more tokens).
 - `cache` – if `true` (default), caches verdicts so identical checks never re‑bill the LLM. See [Caching & Cost](#caching--cost).
+- `report_unparsed` – if `true`, warns when a mapped source file produces no structural signatures (a sign the extractor did not understand it). Off by default; the warning is always shown with `DRIFTLOCK_DEBUG=1`.
 
 ### `audit`
 
