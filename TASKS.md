@@ -64,7 +64,7 @@ exists to prevent. **This milestone is the highest priority.**
   `def type(x)` a symbol named `x`, and `fn type(x: i32)` a symbol named
   `x: i32`. Replace the guess with a declared name group per pattern.
   *Accept:* SQL/Kotlin/Rust/Python/Markdown names are correct.
-- [ ] **M1.A.5 — Java/C# methods without access modifiers (package-private).**
+- [x] **M1.A.5 — Java/C# methods without access modifiers (package-private).**
   `int add(int a, int b) { … }` currently yields only the class. Add an
   optional-modifier pattern guarded so statement lines (`return foo(a);`,
   `obj.call(x);`) never match.
@@ -297,3 +297,8 @@ deterministic string check does perfectly, instantly, and for free.
   (`type` was read as its parameter list), Go methods named `object`, and
   Markdown (every heading collapsed to `#`). Tests:
   `internal/parser/names_test.go`.
+- **M1.A.5** — Java/C# modifier-less methods, interface methods, constructors,
+  and C# expression-bodied/auto properties. Added `pJavaBareMethod`,
+  `pJavaCtor`, `pCSharpProperty`, and a generic `isStatementStart` guard so
+  `return foo(a);` is never read as a declaration. Reused the shared
+  `paramListNoSemi`. Tests: `internal/parser/java_test.go`.

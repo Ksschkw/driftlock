@@ -28,6 +28,13 @@ func extractSignatures(filePath, source string) []Signature {
 			if name == "" || isIgnoredKeyword(name) {
 				continue
 			}
+			// A permissive modifier-less pattern (Java/C#, JS/TS) can read a
+			// statement as a declaration — `return foo(a);` looks like a method
+			// named foo with a return type of "return". A span that begins with
+			// a statement keyword is never a declaration.
+			if isStatementStart(match[0]) {
+				continue
+			}
 			// Skip declarations on ignored lines.
 			startLine := lineOf(sanitized, loc[0])
 			if ignored[startLine] {
@@ -66,6 +73,23 @@ func submatchStrings(src string, loc []int) []string {
 		out[i/2] = src[loc[i]:loc[i+1]]
 	}
 	return out
+}
+
+// isStatementStart reports whether a matched span begins with a statement
+// keyword rather than a declaration. Without it, a modifier-less pattern can
+// read `return foo(a);` as a method declaration whose return type is "return"
+// and whose name is foo.
+func isStatementStart(span string) bool {
+	fields := strings.Fields(span)
+	if len(fields) == 0 {
+		return false
+	}
+	switch strings.ToLower(fields[0]) {
+	case "return", "throw", "new", "yield", "await", "assert", "raise",
+		"delete", "typeof", "print", "del", "else", "goto", "break", "continue":
+		return true
+	}
+	return false
 }
 
 // groupAt returns capture group n (1-based) from a FindStringSubmatch-style

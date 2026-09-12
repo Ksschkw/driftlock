@@ -47,12 +47,13 @@ type langSpec struct {
 // pattern never runs against a Go file. Each pattern declares which capture
 // group holds the symbol name (see the pattern type and pat).
 
-// tsParamList matches a parenthesised parameter list for JS/TS-style
-// declarations. It forbids a top-level ';' so a declaration pattern can never
-// leap across statements to find a later '{' (which made `doSomething(event);`
-// bind to a following anonymous-function body). One level of nested
-// parentheses is permitted, covering default values such as `cb = () => {}`.
-const tsParamList = `\((?:[^;()]|\([^;()]*\))*\)`
+// paramListNoSemi matches a parenthesised parameter list for C-family and
+// JS/TS-style declarations. It forbids a top-level ';' so a declaration
+// pattern can never leap across statements to find a later '{' (which made
+// `doSomething(event);` bind to a following anonymous-function body). One
+// level of nested parentheses is permitted, covering defaults such as
+// `cb = () => {}` and Java/C# casts inside a default.
+const paramListNoSemi = `\((?:[^;()]|\([^;()]*\))*\)`
 
 var (
 	pCFunc = regexp.MustCompile(
@@ -94,18 +95,48 @@ var (
 	pArrowFn  = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*(?::\s*[^=]+)?=\s*(?:async\s+)?\(?([^)=]*)\)?\s*=>`)
 	pFuncKw   = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(\w+)\s*\(([\s\S]*?)\)`)
 	pTsType   = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:declare\s+)?(?:type|interface|enum)\s+(\w+)`)
-	pTsMethod = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|protected|readonly|static|async|get|set|abstract|override)\s+)+(\w+)\s*(?:<[^>]*>)?\s*` + tsParamList + `\s*(?::\s*[^;{]+)?\s*\{`)
+	pTsMethod = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|protected|readonly|static|async|get|set|abstract|override)\s+)+(\w+)\s*(?:<[^>]*>)?\s*` + paramListNoSemi + `\s*(?::\s*[^;{]+)?\s*\{`)
 	// pTsBareMethod matches a class/object method with NO access modifier —
 	// the dominant style in TypeScript and JavaScript (`run(x) { … }`),
 	// which pTsMethod misses because it requires a modifier word. The trailing
 	// `{` is what separates a declaration from a call (`foo(x);`), and
 	// statement keywords are filtered by isIgnoredKeyword.
-	pTsBareMethod = regexp.MustCompile(`(?m)^[\t ]*(\w+)\s*(?:<[^>]*>)?\s*` + tsParamList + `\s*(?::\s*[^;{]+)?\s*\{`)
+	pTsBareMethod = regexp.MustCompile(`(?m)^[\t ]*(\w+)\s*(?:<[^>]*>)?\s*` + paramListNoSemi + `\s*(?::\s*[^;{]+)?\s*\{`)
 
+	// pJavaMethod matches a Java/C# method that carries at least one modifier.
 	pJavaMethod = regexp.MustCompile(
-		`(?m)^[\t ]*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:public|private|protected|internal|static|final|abstract|override|virtual|async|synchronized|native|default)\s+)+` +
+		`(?m)^[\t ]*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:public|private|protected|internal|static|final|abstract|override|virtual|async|synchronized|native|default|sealed|strictfp|partial|new)\s+)+` +
 			`(?:[\w.$]+(?:<[^>]+>)?(?:\[\])?\s+)` +
-			`(\w+)\s*\(([\s\S]*?)\)`)
+			`(\w+)\s*` + paramListNoSemi + `\s*(?:throws\s+[\w., ]+)?(?:=>[^;{]*)?\s*[;{]`)
+
+	// pJavaBareMethod matches a package-private (modifier-less) Java method or
+	// a C# method with no access modifier. Such methods are invisible to
+	// pJavaMethod, which requires a modifier, so their addition, removal, and
+	// signature changes produced no structural change at all. A return-type
+	// token is required before the name (which excludes bare calls) and a
+	// trailing ';' or '{' is required (which excludes expression statements);
+	// statement keywords are additionally filtered by isStatementStart.
+	pJavaBareMethod = regexp.MustCompile(
+		`(?m)^[\t ]*(?:@\w+(?:\([^)]*\))?\s*)*` +
+			`(?:[\w.$]+(?:<[^>]+>)?(?:\[\])?\s+)` +
+			`(\w+)\s*` + paramListNoSemi + `\s*(?:throws\s+[\w., ]+)?(?:=>[^;{]*)?\s*[;{]`)
+
+	// pJavaCtor matches a Java/C# constructor — a capitalized, modifier-less
+	// declaration with no return type and a body. Constructors are part of the
+	// public surface, and requiring the body brace keeps calls from matching.
+	pJavaCtor = regexp.MustCompile(
+		`(?m)^[\t ]*(?:(?:public|private|protected|internal)\s+)*([A-Z]\w*)\s*` +
+			paramListNoSemi + `\s*(?:throws\s+[\w., ]+)?\s*\{`)
+
+	// pCSharpProperty matches a C# property — expression-bodied (`int Count =>
+	// items.Count;`) or auto-implemented (`int Count { get; set; }`). A
+	// property has no parameter list, so it escapes the method patterns
+	// entirely, yet adding or removing a public property is an API change.
+	// It is registered AFTER pClassGroup so `class Foo { }` is still read as a
+	// class rather than as a property named Foo.
+	pCSharpProperty = regexp.MustCompile(
+		`(?m)^[\t ]*(?:(?:public|private|protected|internal|static|readonly|virtual|override|sealed|abstract|new)\s+)*` +
+			`(?:[\w.$]+(?:<[^>]+>)?(?:\[\])?\s+)(\w+)\s*(?:=>[^;{]*;|\{[^{}]*\})`)
 
 	pClassGroup = regexp.MustCompile(
 		`(?m)^[\t ]*(?:(?:public|private|protected|export|abstract|sealed|final|open|data|case|internal|static)\s+)*` +
@@ -155,12 +186,12 @@ var registry = map[string]langSpec{
 	"java": {
 		name: "java", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []pattern{pat(pJavaMethod, 1), pat(pClassGroup, 2)},
+		patterns:     []pattern{pat(pJavaMethod, 1), pat(pJavaBareMethod, 1), pat(pJavaCtor, 1), pat(pClassGroup, 2)},
 	},
 	"csharp": {
 		name: "csharp", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"\"", "'"},
-		patterns:     []pattern{pat(pJavaMethod, 1), pat(pClassGroup, 2)},
+		patterns:     []pattern{pat(pJavaMethod, 1), pat(pJavaBareMethod, 1), pat(pJavaCtor, 1), pat(pClassGroup, 2), pat(pCSharpProperty, 1)},
 	},
 	"c": {
 		name: "c", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
