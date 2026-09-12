@@ -227,7 +227,7 @@ exists to prevent. **This milestone is the highest priority.**
   in action metadata is a **literal string**; GitHub does not evaluate
   expressions there, so the shipped workflow diffs against a bogus revision.
   Compute base/head inside a `run:` step (or require them explicitly).
-- [ ] **M4.2 — CI smoke test.** A workflow that runs the action against a known
+- [x] **M4.2 — CI smoke test.** A workflow that runs the action against a known
   drifted fixture and asserts the expected exit code.
 - [ ] **M4.3 — `driftlock version`.** Build metadata via `-ldflags`.
 - [ ] **M4.4 — Release hygiene.** Per-asset `.sha256`, correct `checksums.txt`,
@@ -430,3 +430,10 @@ deterministic string check does perfectly, instantly, and for free.
 - **M4.1** — `base`/`head` action inputs default to empty; refs are resolved in
   a `run:` step (PR base, then push `before`, then `github.sha`) and passed
   through step outputs. Tests: `cmd/driftlock/action_test.go`.
+- **M4.2** — End-to-end pipeline tests (`internal/hook/e2e_test.go`) run real git
+  plus a stub OpenAI-compatible server against a drifted fixture and assert the
+  decision: drift fails, consistent passes, body-only edit never calls the
+  model. `.github/workflows/smoke.yml` runs build/vet/test and checks the golden
+  corpus is not stale. **This caught a real bug**: in dry-run/range mode an LLM
+  error printed an all-clear and passed; `check` now returns an error and the
+  summary never claims success after a failure.

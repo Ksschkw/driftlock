@@ -362,7 +362,12 @@ func RunWith(ctx context.Context, opts Options) error {
 	}
 
 	// Blocking decisions.
-	if anyLLMError && cfg.Behavior.BlockOnLLMError && !dryRun {
+	if anyLLMError && cfg.Behavior.BlockOnLLMError {
+		if dryRun {
+			// `check` (and range mode) must fail loudly rather than exit;
+			// otherwise a provider outage silently passes a pull request.
+			return fmt.Errorf("documentation check incomplete: the LLM could not be reached")
+		}
 		os.Exit(1)
 	}
 	if anyOutOfSync && cfg.Behavior.BlockOnFalse {
@@ -501,12 +506,18 @@ func resolveSources(opts Options, rangeMode bool) ([]string, func(string) string
 }
 
 func printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError bool, failedDocs []string, cfg *config.Config, dryRun bool) {
-	if anyLLMError && !cfg.Behavior.BlockOnLLMError {
-		fmt.Fprint(os.Stderr, output.YellowStr("\n"+llmErrorMessage(failedDocs, false)+"\n"))
-		return // a check that errored must not also claim success
-	}
-	if anyLLMError && cfg.Behavior.BlockOnLLMError && !dryRun {
-		fmt.Fprint(os.Stderr, output.RedStr("\n"+llmErrorMessage(failedDocs, true)+"\n"))
+	// A check that errored must never also print an all-clear, in any mode.
+	// The previous version only short-circuited when block_on_llm_error was
+	// false or when running non-dry-run, so `driftlock check` in CI reported
+	// "All documentation matches" after a provider failure — the worst possible
+	// message for a gate.
+	if anyLLMError {
+		msg := "\n" + llmErrorMessage(failedDocs, cfg.Behavior.BlockOnLLMError) + "\n"
+		if cfg.Behavior.BlockOnLLMError {
+			fmt.Fprint(os.Stderr, output.RedStr(msg))
+		} else {
+			fmt.Fprint(os.Stderr, output.YellowStr(msg))
+		}
 		return
 	}
 	if anyOutOfSync {
