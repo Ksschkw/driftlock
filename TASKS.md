@@ -105,7 +105,7 @@ exists to prevent. **This milestone is the highest priority.**
   collapse into one, so deleting one is misreported or missed entirely.
   *Accept:* `A.Close` + `B.Close` produce two signatures.
 
-- [ ] **M1.B.2 — Diff as a multiset per name.**
+- [x] **M1.B.2 — Diff as a multiset per name.**
   `diff.ExtractStructuralChanges` keys maps by bare name, so deleting one
   Java overload reports nothing and deleting `A.Close` reports a bogus
   `modified` against `B.Close`. Pair identical signatures first, then report
@@ -315,3 +315,9 @@ deterministic string check does perfectly, instantly, and for free.
 - **M1.B.1** — Dedup now keys on `(name, signature)`, so same-named methods on
   different receivers and overloads both survive extraction. Tests:
   `internal/parser/symbols_test.go`.
+- **M1.B.2** — `ExtractStructuralChanges` now groups by name and compares
+  signatures as multisets, so overload/same-name removal is a real `removed`
+  and single edits stay `modified`. Output order is sorted for cache
+  stability. Tests: `TestSameNameMethodRemovalIsRemoved`,
+  `TestJavaOverloadRemovalIsRemoved`, `TestSameNameMethodEditIsModified`,
+  `TestChangeOrderIsDeterministic`.

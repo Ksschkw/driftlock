@@ -90,3 +90,91 @@ func TestRustReturnTypeChangeIsModified(t *testing.T) {
 		t.Errorf("modified signature does not show the new return type: %q", got[0].NewSig)
 	}
 }
+
+// Deleting one of two same-named methods on different receiver types must be a
+// single `removed`, not a bogus `modified` comparing the two unrelated methods,
+// and not silence.
+func TestSameNameMethodRemovalIsRemoved(t *testing.T) {
+	oldSrc := `package p
+
+type A struct{}
+type B struct{}
+
+func (a *A) Close() error { return nil }
+func (b *B) Close() error { return nil }
+`
+	newSrc := `package p
+
+type A struct{}
+type B struct{}
+
+func (b *B) Close() error { return nil }
+`
+	changes := ExtractStructuralChanges("m.go", oldSrc, newSrc)
+	if got := changeByKind(changes, "removed"); len(got) != 1 {
+		t.Fatalf("expected 1 removed, got %v", changes)
+	}
+	if got := changeByKind(changes, "modified"); len(got) != 0 {
+		t.Errorf("expected no modified, got %v", got)
+	}
+}
+
+// Deleting one Java overload while another survives must be reported.
+func TestJavaOverloadRemovalIsRemoved(t *testing.T) {
+	oldSrc := `class H {
+    public int f(int a) { return a; }
+    public int f(String s) { return 0; }
+}
+`
+	newSrc := `class H {
+    public int f(int a) { return a; }
+}
+`
+	changes := ExtractStructuralChanges("H.java", oldSrc, newSrc)
+	if got := changeByKind(changes, "removed"); len(got) != 1 {
+		t.Fatalf("expected 1 removed overload, got %v", changes)
+	}
+}
+
+// Changing exactly one of two same-named methods is a single `modified`.
+func TestSameNameMethodEditIsModified(t *testing.T) {
+	oldSrc := `package p
+
+type A struct{}
+type B struct{}
+
+func (a *A) Close() error { return nil }
+func (b *B) Close() error { return nil }
+`
+	newSrc := `package p
+
+type A struct{}
+type B struct{}
+
+func (a *A) Close(timeout int) error { return nil }
+func (b *B) Close() error { return nil }
+`
+	changes := ExtractStructuralChanges("m.go", oldSrc, newSrc)
+	if got := changeByKind(changes, "modified"); len(got) != 1 {
+		t.Fatalf("expected 1 modified, got %v", changes)
+	}
+	if got := changeByKind(changes, "removed"); len(got) != 0 {
+		t.Errorf("expected no removed, got %v", got)
+	}
+}
+
+// Output order must be stable because the formatted diff feeds the LLM cache
+// key; a random map order would make identical runs miss the cache.
+func TestChangeOrderIsDeterministic(t *testing.T) {
+	oldSrc := "package p\nfunc Zeta() {}\nfunc Alpha() {}\nfunc Mid() {}\n"
+	newSrc := "package p\n"
+	first := ExtractStructuralChanges("p.go", oldSrc, newSrc)
+	for i := 0; i < 20; i++ {
+		again := ExtractStructuralChanges("p.go", oldSrc, newSrc)
+		for j := range first {
+			if first[j] != again[j] {
+				t.Fatalf("change order unstable at %d: %v vs %v", j, first, again)
+			}
+		}
+	}
+}
