@@ -59,11 +59,23 @@ func extractSignatures(filePath, source string) []Signature {
 			// so a '{' or ';' inside a string can never truncate the signature.
 			sanSlice := sanitized[loc[0]:loc[1]]
 			origSlice := source[loc[0]:loc[1]]
+			// Comments and strings are blanked to spaces in the sanitized copy,
+			// so a trailing comment shows up as trailing spaces. Trim to the
+			// last meaningful sanitized character so the original's comment is
+			// not carried into the signature.
+			if n := len(strings.TrimRight(sanSlice, " \t")); n < len(sanSlice) {
+				sanSlice = sanSlice[:n]
+				origSlice = origSlice[:n]
+			}
 			// C-like declarations end at the body brace or statement
 			// terminator. Indentation-delimited languages (Python, Ruby) do
 			// not, and a '{' or ';' there is legitimate signature content:
 			// `def f(x: dict = {})` was cut to `def f(x: dict = `.
-			if !spec.indentDelimited {
+			if p.goTypeExpr {
+				if cut := cutGoTypeBody(sanSlice); cut != -1 {
+					origSlice = origSlice[:cut]
+				}
+			} else if !spec.indentDelimited {
 				if cut := strings.IndexAny(sanSlice, "{;"); cut != -1 {
 					origSlice = origSlice[:cut]
 				}
@@ -116,6 +128,55 @@ func isStatementStart(span string) bool {
 		return true
 	}
 	return false
+}
+
+// goTypeBodyRE matches a Go type declaration whose type expression is a struct
+// or interface, i.e. one that opens a body rather than naming an element type.
+var goTypeBodyRE = regexp.MustCompile(`^\s*type\s+\w+(?:\s*\[[^\]]*\])?\s+(?:=\s*)?(?:struct|interface)\b`)
+
+// cutGoTypeBody decides where a Go type declaration's signature ends.
+//
+// A struct or interface body is dropped so the result matches the multi-line
+// form (`type Foo struct {` -> `type Foo struct`). A balanced brace group that
+// is part of the type — `type Set[T comparable] map[T]struct{}` — is kept,
+// because the element type is API surface and a change to it must be detected.
+func cutGoTypeBody(s string) int {
+	if goTypeBodyRE.MatchString(s) {
+		return strings.IndexByte(s, '{')
+	}
+	return cutUnbalancedBrace(s)
+}
+
+// cutUnbalancedBrace returns the index of the first '{' in s that is not
+// closed later in s, or -1 when every brace is balanced. It lets Go type
+// declarations keep `map[K]V{}` (balanced, part of the type) while dropping
+// `struct {` (unbalanced, the start of a body).
+func cutUnbalancedBrace(s string) int {
+	i := 0
+	for i < len(s) {
+		if s[i] != '{' {
+			i++
+			continue
+		}
+		depth := 0
+		j := i
+		for ; j < len(s); j++ {
+			switch s[j] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+			}
+			if depth == 0 {
+				break
+			}
+		}
+		if depth != 0 {
+			return i
+		}
+		i = j + 1
+	}
+	return -1
 }
 
 // isPublicSymbol applies a language's visibility rule so private declarations

@@ -108,3 +108,85 @@ func Apply(xs []int, f func(int) int) []int {
 		t.Errorf("return type lost after func-typed parameter: %q", sig.Signature)
 	}
 }
+
+// A Go type alias to a map/slice/chan keeps its element type in the signature;
+// the old pattern stopped at the kind keyword, so `type Set map[T]struct{}`
+// was captured as `type Set map` and a change to the element type was invisible.
+func TestGoTypeExpressionFidelity(t *testing.T) {
+	source := `package p
+
+type Set[T comparable] map[T]int
+
+type Names []string
+
+type Stream chan int
+
+type Fn func(int) int
+
+type Alias = string
+`
+	sigs := parser.ExtractSignatures("types.go", source)
+	cases := map[string]string{
+		"Set":    "map[T]int",
+		"Names":  "[]string",
+		"Stream": "chan int",
+		"Fn":     "func(int) int",
+		"Alias":  "string",
+	}
+	for name, want := range cases {
+		sig, ok := findBy(sigs, name)
+		if !ok {
+			t.Errorf("type %q not extracted; got %v", name, names(sigs))
+			continue
+		}
+		if !strings.Contains(sig.Signature, want) {
+			t.Errorf("type %q signature %q missing %q", name, sig.Signature, want)
+		}
+	}
+}
+
+// A struct/interface body is dropped, matching the multi-line form, so field
+// formatting does not decide whether fields appear in the signature.
+func TestGoStructBodyExcludedFromSignature(t *testing.T) {
+	source := `package p
+
+type Inline struct{ A int }
+
+type Multiline struct {
+	B string
+}
+
+type Reader interface{ Read(p []byte) (int, error) }
+`
+	sigs := parser.ExtractSignatures("s.go", source)
+	for _, name := range []string{"Inline", "Multiline", "Reader"} {
+		sig, ok := findBy(sigs, name)
+		if !ok {
+			t.Fatalf("type %q not extracted; got %v", name, names(sigs))
+		}
+		if strings.Contains(sig.Signature, "A int") || strings.Contains(sig.Signature, "B string") || strings.Contains(sig.Signature, "Read(") {
+			t.Errorf("type %q signature includes a body: %q", name, sig.Signature)
+		}
+	}
+}
+
+// A trailing line comment must not be carried into the signature now that the
+// type expression runs to end of line.
+func TestGoTypeTrailingCommentExcluded(t *testing.T) {
+	source := "package p\n\ntype Set[T comparable] map[T]int // element type\n\ntype Foo struct { // body\n\tA int\n}\n"
+	sigs := parser.ExtractSignatures("c.go", source)
+	set, ok := findBy(sigs, "Set")
+	if !ok {
+		t.Fatalf("Set not extracted; got %v", names(sigs))
+	}
+	if strings.Contains(set.Signature, "//") || strings.Contains(set.Signature, "element type") {
+		t.Errorf("trailing comment leaked into signature: %q", set.Signature)
+	}
+	foo, ok := findBy(sigs, "Foo")
+	if !ok {
+		t.Fatalf("Foo not extracted; got %v", names(sigs))
+	}
+	if strings.Contains(foo.Signature, "//") {
+		t.Errorf("trailing comment leaked into signature: %q", foo.Signature)
+	}
+}

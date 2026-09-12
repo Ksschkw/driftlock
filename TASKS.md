@@ -111,7 +111,7 @@ exists to prevent. **This milestone is the highest priority.**
   trigger a documentation block. The README claims only public signatures are
   considered. *Accept:* Go unexported, Python `_`-prefixed, and non-`pub` Rust
   declarations are excluded from structural changes.
-- [ ] **M1.A.13 — Go type-expression fidelity.** `type Set[T comparable]
+- [x] **M1.A.13 — Go type-expression fidelity.** `type Set[T comparable]
   map[T]struct{}` is captured as `type Set[T comparable] map`, so a change to
   the element type is invisible. *Accept:* the full type expression is part of
   the signature for map/slice/chan/array types.
@@ -401,3 +401,9 @@ deterministic string check does perfectly, instantly, and for free.
   structural signatures, via `[behavior] report_unparsed` (default off) or
   `DRIFTLOCK_DEBUG=1`, and in the JSON report as `unparsed`. Silence is now
   distinguishable from "could not parse". Tests: `internal/hook/unparsed_test.go`.
+- **M1.A.13** — Go type expressions run to end of line, with a Go-specific cut:
+  struct/interface bodies are dropped (matching the multi-line form) while
+  balanced brace groups that are part of the type (`map[T]struct{}`) are kept.
+  Trailing comments are trimmed from all signatures. Tests:
+  `TestGoTypeExpressionFidelity`, `TestGoStructBodyExcludedFromSignature`,
+  `TestGoTypeTrailingCommentExcluded`.

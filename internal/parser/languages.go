@@ -14,6 +14,11 @@ import (
 type pattern struct {
 	re        *regexp.Regexp
 	nameGroup int
+	// goTypeExpr marks the Go type-declaration pattern, whose signature runs to
+	// the end of the line and needs a Go-specific rule for where it ends:
+	// a struct/interface body is dropped, while a balanced brace group that is
+	// part of the type (`map[T]struct{}`) is kept.
+	goTypeExpr bool
 	// scopeGroup, when non-zero, is the capture group holding the enclosing
 	// scope of the declaration (a Go receiver type or a Rust impl target).
 	// It is reserved for qualified naming; 0 means "no scope".
@@ -23,6 +28,11 @@ type pattern struct {
 // pat builds a pattern whose symbol name lives in the given capture group.
 func pat(re *regexp.Regexp, nameGroup int) pattern {
 	return pattern{re: re, nameGroup: nameGroup}
+}
+
+// patGoType is pat for the Go type-declaration pattern (see goTypeExpr).
+func patGoType(re *regexp.Regexp, nameGroup int) pattern {
+	return pattern{re: re, nameGroup: nameGroup, goTypeExpr: true}
 }
 
 // langSpec describes how to sanitize and pattern-match a single language (or
@@ -116,7 +126,10 @@ var (
 			`\s*(?:\([\s\S]*?\)|[\w\[\]\.\*&<> ,]+)?\s*\{?`)
 
 	// Go type declarations, including generic ones (`type Stack[T any] struct`).
-	pGoType = regexp.MustCompile(`(?m)^[\t ]*type\s+(\w+)(?:\s*\[[^\]]*\])?\s+(struct|interface|func|map|\[|chan|\w)`)
+	// The type expression runs to the end of the line so an alias like
+	// `type Set[T comparable] map[T]struct{}` keeps its element type; the
+	// noBraceCut rule then drops only an unbalanced '{' (a struct body).
+	pGoType = regexp.MustCompile(`(?m)^[\t ]*type\s+(\w+)(?:\s*\[[^\]]*\])?\s+([^\n]+)`)
 
 	// pPyDef includes an optional return annotation (`-> int`). It was omitted
 	// previously, so changing a Python return type produced no structural
@@ -216,7 +229,7 @@ var registry = map[string]langSpec{
 	"go": {
 		name: "go", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"`", "\""},
-		patterns:     []pattern{pat(pGoFunc, 1), pat(pGoType, 1)},
+		patterns:     []pattern{pat(pGoFunc, 1), patGoType(pGoType, 1)},
 		visibility:   "go",
 	},
 	"python": {
