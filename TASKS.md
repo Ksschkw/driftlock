@@ -246,7 +246,7 @@ exists to prevent. **This milestone is the highest priority.**
 - [x] **M5.2 — Cache persistence independent of exit order.**
 - [x] **M5.3 — Pipeline integration tests** with a fake `Provider` covering
   staged/range, report/json, block paths, and the M2 bugs.
-- [ ] **M5.4 — Fix or remove `driftlock status`.** It renders a full prompt and
+- [x] **M5.4 — Fix or remove `driftlock status`.** It renders a full prompt and
   passes it as the `diff` argument, double-wrapping the check prompt, and reads
   HEAD rather than the working tree.
 - [ ] **M5.5 — Injectable git layer** so pipeline tests need no real repo.
@@ -465,3 +465,7 @@ deterministic string check does perfectly, instantly, and for free.
   still blocks for review; report mode never fails; and the JSON report is valid
   JSON describing drift, mode, per-doc status, and changes. Tests:
   `internal/hook/pipeline_test.go`.
+- **M5.4** — `driftlock status` is now a **deterministic coverage report**: no
+  provider, no double-wrapped prompt, no HEAD-vs-working-tree confusion. It
+  lists symbols the mapped docs never mention; `--strict` exits non-zero.
+  Tests: `internal/hook/status_test.go`; README/docs updated.

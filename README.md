@@ -244,7 +244,7 @@ The `ollama` driver speaks the native Ollama API (default
 | `driftlock check [--base REF] [--head REF] [--report] [--json]` | Check for drift; never modifies files. `--base` enables CI range mode |
 | `driftlock fix` | Force regeneration of all mapped documentation |
 | `driftlock log` | Show the last 20 audit log entries |
-| `driftlock status` | Show current status |
+| `driftlock status [--strict]` | Report which public symbols the mapped docs never mention (deterministic, no LLM) |
 | `driftlock version` | Print version and build metadata |
 
 `driftlock check` runs against the **staged index** by default (identical to the

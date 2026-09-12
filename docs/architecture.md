@@ -75,7 +75,7 @@ cmd/driftlock/            CLI commands (Cobra)
   check.go                read-only check (staged or base..head; --report/--json)
   fix.go                  force-regenerate mapped docs for staged files
   log.go                  show the last 20 audit entries
-  status.go               show status
+  status.go               deterministic coverage report (no LLM)
 
 internal/
   git/                    read staged index and base..head content
