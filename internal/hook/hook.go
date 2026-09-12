@@ -245,7 +245,9 @@ func RunWith(ctx context.Context, opts Options) error {
 				fmt.Fprintf(os.Stderr, "[DEBUG] %s: cache hit\n", docPath)
 			}
 		} else {
-			result = checkDocWithRetry(ctx, provider, cfg.Behavior.MaxRetries, diffWithNote, checkDoc)
+			checkCtx, cancelCheck := context.WithTimeout(ctx, perCheckBudget(cfg))
+			result = checkDocWithRetry(checkCtx, provider, cfg.Behavior.MaxRetries, diffWithNote, checkDoc)
+			cancelCheck()
 			if result.err == nil {
 				verdictCache.Set(cacheKey, cache.Entry{OK: result.ok, Explanation: result.explanation})
 			}
@@ -530,13 +532,43 @@ func FixAll(ctx context.Context) error {
 	return nil
 }
 
-// checkDocWithRetry calls provider.Check with exponential backoff.
+// perCheckBudget is the total time allowed for one document's check, including
+// its retries and inter-attempt backoff. Each individual request is already
+// bounded by the HTTP client timeout; this bounds the whole check so a slow
+// provider cannot stretch a single document across an unbounded series of
+// attempts.
+func perCheckBudget(cfg *config.Config) time.Duration {
+	attempts := cfg.Behavior.MaxRetries + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+	budget := cfg.LLM.HTTPTimeout() * time.Duration(attempts)
+	for i := 1; i <= cfg.Behavior.MaxRetries; i++ {
+		budget += time.Duration(math.Pow(2, float64(i))) * time.Second
+	}
+	return budget + time.Second
+}
+
+// checkDocWithRetry calls provider.Check with exponential backoff. It honours
+// ctx: the backoff wait is interruptible and no attempt is started on a
+// cancelled context, so an expired per-check deadline returns promptly instead
+// of sleeping out the remaining backoff.
 func checkDocWithRetry(ctx context.Context, provider types.Provider, maxRetries int, diff, doc string) checkResult {
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			if lastErr != nil {
+				return checkResult{err: fmt.Errorf("cancelled after %d attempt(s): %w", attempt, err)}
+			}
+			return checkResult{err: fmt.Errorf("cancelled before the first attempt: %w", err)}
+		}
 		if attempt > 0 {
 			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
-			time.Sleep(backoff)
+			select {
+			case <-ctx.Done():
+				return checkResult{err: fmt.Errorf("cancelled during backoff: %w", ctx.Err())}
+			case <-time.After(backoff):
+			}
 		}
 		ok, explanation, err := provider.Check(ctx, diff, doc)
 		if err == nil {

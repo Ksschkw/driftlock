@@ -177,7 +177,7 @@ exists to prevent. **This milestone is the highest priority.**
 - [x] **M2.D.1 — HTTP client timeout.**
   Adapters use `&http.Client{}` with no timeout and `context.Background()`, so
   a hung provider hangs `git commit` forever. Add a configurable timeout.
-- [ ] **M2.D.2 — Per-run deadline.**
+- [x] **M2.D.2 — Per-run deadline.**
   Apply a context deadline to the whole run.
 - [ ] **M2.D.3 — Fail-open with a loud warning.**
   On timeout, respect `block_on_llm_error` but always print an actionable
@@ -342,3 +342,7 @@ deterministic string check does perfectly, instantly, and for free.
 - **M2.D.1** — Added `[llm] timeout_seconds` (default 60) and
   `LLMConfig.HTTPTimeout()`, applied to both adapters' `http.Client`. Docs and
   `.driftlock.example.toml` updated. Tests: `internal/config/config_test.go`.
+- **M2.D.2** — `checkDocWithRetry` honours context cancellation (no attempt on a
+  dead context, interruptible backoff) and each document's check runs under a
+  `perCheckBudget` deadline derived from the HTTP timeout and retry count.
+  Tests: `internal/hook/retry_test.go`.
