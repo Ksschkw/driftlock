@@ -35,6 +35,11 @@ type langSpec struct {
 	blockComment [][2]string // e.g. {"/*", "*/"}
 	stringDelims []string    // e.g. "\"", "'", "`", "\"\"\""
 	patterns     []pattern
+	// indentDelimited marks languages whose declarations end at a newline or
+	// colon rather than at a brace or semicolon (Python, Ruby). For these the
+	// brace/semicolon truncation is skipped, because a '{' or ';' can legally
+	// appear inside a parameter default (`def f(x: dict = {})`).
+	indentDelimited bool
 	// dataLike marks structured-data languages (YAML/JSON/TOML/XML/Markdown)
 	// whose "structure" lives in keys/tags/headings rather than code
 	// signatures. String/comment stripping is skipped for these because the
@@ -54,6 +59,12 @@ type langSpec struct {
 // level of nested parentheses is permitted, covering defaults such as
 // `cb = () => {}` and Java/C# casts inside a default.
 const paramListNoSemi = `\((?:[^;()]|\([^;()]*\))*\)`
+
+// pyParamList matches a Python parameter list. It forbids nothing but
+// parentheses at the top level, because a Python default may contain braces
+// (`{}`), brackets, semicolons, and colons. One level of nested parentheses is
+// permitted so `x=len(y)` does not truncate the list.
+const pyParamList = `\((?:[^()]|\([^()]*\))*\)`
 
 var (
 	pCFunc = regexp.MustCompile(
@@ -88,8 +99,9 @@ var (
 
 	// pPyDef includes an optional return annotation (`-> int`). It was omitted
 	// previously, so changing a Python return type produced no structural
-	// change at all.
-	pPyDef   = regexp.MustCompile(`(?m)^[\t ]*(?:async\s+)?def\s+(\w+)\s*\(([\s\S]*?)\)\s*(?:->\s*[^:\n]+)?`)
+	// change at all. The parameter list tolerates one level of nested
+	// parentheses so a default such as `x=len(y)` cannot truncate it.
+	pPyDef   = regexp.MustCompile(`(?m)^[\t ]*(?:async\s+)?def\s+(\w+)\s*` + pyParamList + `\s*(?:->\s*[^:\n]+)?`)
 	pPyClass = regexp.MustCompile(`(?m)^[\t ]*class\s+(\w+)`)
 
 	pRustFn   = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:const\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*\(([\s\S]*?)\)`)
@@ -173,8 +185,9 @@ var registry = map[string]langSpec{
 	},
 	"python": {
 		name: "python", lineComments: []string{"#"},
-		stringDelims: []string{`"""`, "'''", "\"", "'"},
-		patterns:     []pattern{pat(pPyDef, 1), pat(pPyClass, 1)},
+		stringDelims:    []string{`"""`, "'''", "\"", "'"},
+		patterns:        []pattern{pat(pPyDef, 1), pat(pPyClass, 1)},
+		indentDelimited: true,
 	},
 	"javascript": {
 		name: "javascript", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
@@ -228,8 +241,9 @@ var registry = map[string]langSpec{
 	},
 	"ruby": {
 		name: "ruby", lineComments: []string{"#"},
-		stringDelims: []string{"\"", "'"},
-		patterns:     []pattern{pat(pRubyDef, 1), pat(pClassGroup, 2)},
+		stringDelims:    []string{"\"", "'"},
+		patterns:        []pattern{pat(pRubyDef, 1), pat(pClassGroup, 2)},
+		indentDelimited: true,
 	},
 	"shell": {
 		name: "shell", lineComments: []string{"#"},

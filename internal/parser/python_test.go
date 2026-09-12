@@ -34,3 +34,33 @@ func TestPythonAsyncReturnAnnotation(t *testing.T) {
 		t.Errorf("async return annotation missing: %q", sig.Signature)
 	}
 }
+
+// A '{' or ';' inside a Python parameter default used to truncate the
+// signature because the C-style brace/semicolon cut was applied to every
+// language. `def f(x: dict = {})` became `def f(x: dict = `.
+func TestPythonDefaultsWithBracesDoNotTruncate(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"dict default", "def f(x: dict = {}) -> dict:\n    return x\n", "x: dict = {}"},
+		{"set default", "def g(items: set = {1, 2}):\n    return items\n", "items: set = {1, 2}"},
+		{"nested call default", "def h(n: int = len(\"abc\")) -> int:\n    return n\n", "n: int = len("},
+		{"lambda default", "def k(cb=lambda: None) -> None:\n    pass\n", "cb=lambda: None"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sigs := parser.ExtractSignatures("d.py", tc.src)
+			if len(sigs) != 1 {
+				t.Fatalf("expected 1 signature, got %v", sigs)
+			}
+			if !strings.Contains(sigs[0].Signature, tc.want) {
+				t.Errorf("signature %q missing %q", sigs[0].Signature, tc.want)
+			}
+			if strings.HasSuffix(strings.TrimSpace(sigs[0].Signature), "=") {
+				t.Errorf("signature truncated at a brace/semicolon: %q", sigs[0].Signature)
+			}
+		})
+	}
+}

@@ -76,7 +76,7 @@ exists to prevent. **This milestone is the highest priority.**
   the signature truncates at `)`. Include the return annotation.
   *Accept:* a return-annotation change produces one `modified` change.
 
-- [ ] **M1.A.7 — Python signatures must not truncate on brace/semicolon.**
+- [x] **M1.A.7 — Python signatures must not truncate on brace/semicolon or nested parens.**
   `def f(x: dict = {})` is currently cut to `def f(x: dict = ` because the
   brace/semicolon truncation is applied to every language. Make the truncation
   set language-specific.
@@ -305,3 +305,7 @@ deterministic string check does perfectly, instantly, and for free.
 - **M1.A.6** — Python return annotations (`-> T`) are now part of the
   signature, so a return-type change registers as one `modified`. Tests:
   `internal/parser/python_test.go`, `TestPythonReturnTypeChangeIsModified`.
+- **M1.A.7** — Added `indentDelimited` to the language spec so the C-style
+  brace/semicolon cut is skipped for Python/Ruby, and a nested-paren-tolerant
+  `pyParamList`. `def f(x: dict = {})` no longer truncates. Test:
+  `TestPythonDefaultsWithBracesDoNotTruncate`.

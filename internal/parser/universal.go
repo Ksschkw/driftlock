@@ -51,8 +51,14 @@ func extractSignatures(filePath, source string) []Signature {
 			// so a '{' or ';' inside a string can never truncate the signature.
 			sanSlice := sanitized[loc[0]:loc[1]]
 			origSlice := source[loc[0]:loc[1]]
-			if cut := strings.IndexAny(sanSlice, "{;"); cut != -1 {
-				origSlice = origSlice[:cut]
+			// C-like declarations end at the body brace or statement
+			// terminator. Indentation-delimited languages (Python, Ruby) do
+			// not, and a '{' or ';' there is legitimate signature content:
+			// `def f(x: dict = {})` was cut to `def f(x: dict = `.
+			if !spec.indentDelimited {
+				if cut := strings.IndexAny(sanSlice, "{;"); cut != -1 {
+					origSlice = origSlice[:cut]
+				}
 			}
 			sigs = append(sigs, Signature{Name: name, Signature: tidySignature(origSlice)})
 		}
