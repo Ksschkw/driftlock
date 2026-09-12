@@ -302,6 +302,7 @@ If you decline (keeping a literal key in the file), `init` gitignores
   endpoint = "https://openrouter.ai/api/v1/chat/completions"
   model = "deepseek/deepseek-chat"
   api_key = "${DRIFTLOCK_API_KEY}"
+  timeout_seconds = 60
   [llm.options]
     temperature = 0.0
     max_tokens = 4096
@@ -313,6 +314,8 @@ If you decline (keeping a literal key in the file), `init` gitignores
   max_retries = 2
   include_full_diff = false
   cache = true
+  check_mode = "auto"
+  report_unparsed = false
 
 [audit]
   solana = false

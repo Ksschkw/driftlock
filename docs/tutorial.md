@@ -102,9 +102,12 @@ $ driftlock init
 ── Solana audit (optional) ──
   Enable Solana audit logging (y/n) [n]: n
 
+Installed the pre-commit hook at /path/to/repo/.git/hooks/pre-commit
+
 Driftlock initialized successfully.
-A .driftlock.toml has been created, the pre-commit hook is active,
-and .driftlock.toml and .driftlock/ have been added to .gitignore.
+The pre-commit hook is active. .driftlock.toml is safe to commit
+(it holds no secret) so your team shares one policy; .env and
+.driftlock/ are gitignored.
 ```
 
 The resulting `.driftlock.toml`:
@@ -119,6 +122,7 @@ The resulting `.driftlock.toml`:
   endpoint = "https://openrouter.ai/api/v1/chat/completions"
   model = "deepseek/deepseek-chat"
   api_key = "${DRIFTLOCK_API_KEY}"
+  timeout_seconds = 60
   [llm.options]
     temperature = 0.0
     max_tokens = 2048
@@ -129,9 +133,14 @@ The resulting `.driftlock.toml`:
   max_retries = 2
   include_full_diff = false
   block_on_llm_error = false
+  report_unparsed = false
+  check_mode = "auto"
 
 [audit]
   solana = false
+  rpc_endpoint = ""
+  keypair_path = ""
+  program_id = ""
 ```
 
 Export your key:
@@ -161,17 +170,10 @@ Notice that `README.md` still documents the two-argument form. That is drift.
 $ git add src/calc.go
 $ git commit -m "calc: Add now takes three integers"
 
-driftlock: checking staged changes...
+driftlock: README.md → outdated (README documents Add with two parameters, but the signature now takes three.)
+driftlock: README.md has been updated to reflect your changes.
 
-  src/calc.go → README.md
-    modified: func Add(a int, b int, c int) int
-    verdict:  FALSE — README documents Add with two parameters, but the
-              signature now takes three (a, b, c).
-
-  auto_fix is on: Driftlock rewrote README.md to match the new signature.
-  Review the changes, stage README.md, and commit again.
-
-Commit blocked.
+Commit blocked: documentation is out of sync. Review the updated files and stage them.
 ```
 
 Nothing was committed. Driftlock parsed the old and new content of `src/calc.go`, diffed the signatures **by name**, found `Add` modified, mapped `src/calc.go` to `README.md`, extracted just the section mentioning `Add` ("smart chunking"), and asked the LLM whether the docs still match. The verdict was `FALSE`, so — because `auto_fix = true` — it rewrote that section and blocked the commit for your review.

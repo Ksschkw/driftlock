@@ -184,6 +184,7 @@ driver = "openai-compatible"       # or "ollama"
 endpoint = "https://api.openrouter.ai/api/v1/chat/completions"
 model = "deepseek/deepseek-chat"
 api_key = "${DRIFTLOCK_API_KEY}"   # env var expansion
+timeout_seconds = 60               # per-request timeout
 ```
 
 - `driver` – adapter: `openai-compatible` (OpenRouter, Groq, DeepSeek, Together, vLLM) or `ollama`.
@@ -331,7 +332,7 @@ Driftlock ships a [`pre-commit`](https://pre-commit.com) hook. Add to your
 ```yaml
 repos:
   - repo: https://github.com/Ksschkw/driftlock
-    rev: v0.3.0
+    rev: v0.4.0
     hooks:
       - id: driftlock
 ```

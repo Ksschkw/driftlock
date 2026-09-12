@@ -123,7 +123,7 @@ Add it to your project's `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/Ksschkw/driftlock
-    rev: main            # or a tag
+    rev: v0.4.0          # pin a tag; `main` moves under you
     hooks:
       - id: driftlock
 ```

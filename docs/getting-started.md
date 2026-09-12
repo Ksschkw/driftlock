@@ -6,6 +6,7 @@ This guide takes you from zero to a working Driftlock installation and your firs
 
 - **Git** — Driftlock operates on your staged index and on `git` ranges.
 - An **LLM endpoint and API key** for a chat-completions-compatible provider (OpenRouter, Groq, DeepSeek, Together, vLLM, or a local Ollama). See [Providers](./providers.md) for the full list and recommended models.
+  - Not always required: an added symbol the docs never mention, and a removed symbol they still describe, are decided by string matching with no model call. Set `check_mode = "deterministic"` to run with no provider at all.
 - For installing from source: **Go 1.24+**.
 
 ## 1. Install
@@ -53,8 +54,16 @@ driftlock init
 `driftlock init` walks you through every configuration option (press **Enter** to accept the default shown in `[brackets]`) and then:
 
 1. Writes a complete `.driftlock.toml` at the Git root.
-2. Installs `.git/hooks/pre-commit` (which simply runs `driftlock hook-run`).
-3. Adds `.driftlock.toml` and `.driftlock/` to your `.gitignore`.
+2. Installs the pre-commit hook **where git actually reads it** — `core.hooksPath`
+   if you have set it (husky, a shared hooks directory), otherwise
+   `.git/hooks/pre-commit`.
+   - An existing hook is **never overwritten**. Driftlock's block is appended to
+     it, and the original is backed up to `pre-commit.driftlock-backup` first.
+   - Running `init` twice changes nothing the second time.
+3. Updates `.gitignore`: `.driftlock/` (local cache and audit log) and `.env`
+   (secrets) are always ignored. `.driftlock.toml` is ignored **only** if it
+   still contains a literal API key; otherwise it stays committable so your team
+   can share one policy file.
 
 A typical session looks like this:
 
@@ -86,9 +95,12 @@ A typical session looks like this:
 ── Solana audit (optional) ──
   Enable Solana audit logging (y/n) [n]: n
 
+Installed the pre-commit hook at /path/to/repo/.git/hooks/pre-commit
+
 Driftlock initialized successfully.
-A .driftlock.toml has been created, the pre-commit hook is active,
-and .driftlock.toml and .driftlock/ have been added to .gitignore.
+The pre-commit hook is active. .driftlock.toml is safe to commit
+(it holds no secret) so your team shares one policy; .env and
+.driftlock/ are gitignored.
 ```
 
 > **Note:** `driftlock init` refuses to run if a `.driftlock.toml` already exists. Remove it first if you want to reinitialize.
@@ -110,7 +122,7 @@ Export it in your shell (or add it to a `.env` you source):
 export DRIFTLOCK_API_KEY="sk-or-v1-your-real-key"
 ```
 
-> **Tip:** Because `.driftlock.toml` is git-ignored by `init`, you *can* paste a literal key into it, but using `${DRIFTLOCK_API_KEY}` keeps secrets out of files entirely. This is the same variable the [GitHub Action](./ci-cd.md) uses.
+> **Tip:** With `${DRIFTLOCK_API_KEY}` in the config, `.driftlock.toml` holds no secret and is meant to be committed, so the whole team shares one policy. If you instead paste a literal key, `init` gitignores the config and prints how to move the key into `.env`. `DRIFTLOCK_API_KEY` is the same variable the [GitHub Action](./ci-cd.md) uses.
 
 ## 4. Make your first (blocked) commit
 
@@ -134,17 +146,10 @@ git commit -m "auth: require password on Login"
 The pre-commit hook fires. Driftlock detects that the `Login` signature changed but `README.md` still describes the old one, asks the LLM to confirm the drift, rewrites the affected section (because `auto_fix` is on), and **blocks the commit** so you can review the rewrite:
 
 ```text
-driftlock: documentation is out of sync with structural code changes
+driftlock: README.md → outdated (README still documents Login with a single argument.)
+driftlock: README.md has been updated to reflect your changes.
 
-  src/auth.go → README.md
-    modified: func Login(user, password string) error
-    reason: README still documents Login with a single argument.
-
-  Driftlock rewrote README.md to match. Review the changes, then:
-    git add README.md
-    git commit
-
-Commit blocked.
+Commit blocked: documentation is out of sync. Review the updated files and stage them.
 ```
 
 Inspect the diff Driftlock produced, stage it, and commit again:
@@ -156,6 +161,11 @@ git commit -m "auth: require password on Login"
 ```
 
 This time the docs match the code, and the commit succeeds.
+
+> **Why that was cheap:** a *modified* signature the docs do mention is the one
+> case that genuinely needs a model. A brand-new function nobody documented, or a
+> removed one still described, is caught by string matching alone — instantly,
+> reproducibly, and with no tokens spent.
 
 ### Bypass for a single commit
 
