@@ -93,7 +93,7 @@ func (p *openAICompatible) sendForCompletion(ctx context.Context, userPrompt str
 	if err != nil {
 		return "", err
 	}
-	if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+	if config.DebugEnabled() {
 		fmt.Fprintf(os.Stderr, "[DEBUG] LLM raw response:\n%s\n[END DEBUG]\n", raw)
 	}
 	cleaned := stripPreambleMarkdown(stripReasoning(raw))
@@ -106,7 +106,7 @@ func (p *openAICompatible) doRequest(ctx context.Context, reqBody map[string]int
 		return "", err
 	}
 
-	if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+	if config.DebugEnabled() {
 		fmt.Fprintf(os.Stderr, "[DEBUG] LLM request body:\n%s\n", string(jsonBody))
 	}
 
@@ -153,7 +153,7 @@ func (p *openAICompatible) doRequest(ctx context.Context, reqBody map[string]int
 		return "", fmt.Errorf("empty response from LLM")
 	}
 
-	if os.Getenv("DRIFTLOCK_DEBUG") != "" && result.Usage.TotalTokens > 0 {
+	if config.DebugEnabled() && result.Usage.TotalTokens > 0 {
 		fmt.Fprintf(os.Stderr, "[DEBUG] token usage: prompt=%d completion=%d total=%d\n",
 			result.Usage.PromptTokens, result.Usage.CompletionTokens, result.Usage.TotalTokens)
 	}

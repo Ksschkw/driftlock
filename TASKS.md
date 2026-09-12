@@ -267,7 +267,7 @@ deterministic string check does perfectly, instantly, and for free.
 
 ## M7 — Housekeeping, correctness details, and docs
 
-- [ ] **M7.1 — dotenv inline comments.** `.env.example` ships `KEY=1 # note`,
+- [x] **M7.1 — dotenv inline comments.** `.env.example` ships `KEY=1 # note`,
   but the parser keeps the comment as part of the value, so copying it turns
   debug on permanently.
 - [ ] **M7.2 — Fix `.env.example`** to match the parser's real capabilities.
@@ -493,3 +493,11 @@ deterministic string check does perfectly, instantly, and for free.
   docs/architecture.md (new pipeline stage + invariant), docs/caching.md (a
   "deterministic-first" cost section), and `.driftlock.example.toml`.
   `TestExampleConfigLoads` guards the example from rot.
+- **M7.1** — `parseDotEnvValue` strips trailing `#` comments (space-preceded)
+  while preserving quoted values and `abc#def`. Tests:
+  `TestParseDotEnvValue`, `TestLoadDotEnvStripsInlineComments`.
+- **M7.2** — `DRIFTLOCK_DEBUG` now uses a truthy check
+  (`config.DebugEnabled()`), so the documented `=0` actually disables it; the
+  non-empty check had made `0` enable debug. `.env.example` rewritten to match,
+  and it now documents `DRIFTLOCK_STRICT_LLM`. Tests: `TestDebugEnabled`,
+  `TestExampleDotEnvValues`.

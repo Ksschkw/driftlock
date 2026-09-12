@@ -93,6 +93,21 @@ const (
 	CheckModeLLM = "llm"
 )
 
+// DebugEnabled reports whether DRIFTLOCK_DEBUG asks for verbose output. Any of
+// "1", "true", "yes", or "on" (case-insensitive) enables it; an empty value,
+// "0", "false", "no", or "off" disables it.
+//
+// The check used to be "is the variable non-empty", so the documented
+// `DRIFTLOCK_DEBUG=0` turned debugging ON and every commit dumped raw LLM
+// payloads to stderr.
+func DebugEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("DRIFTLOCK_DEBUG"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
 // ResolvedCheckMode returns the effective check mode. An empty or unrecognised
 // value resolves to auto, so configs written before this option existed keep
 // working and a typo cannot silently disable the model.

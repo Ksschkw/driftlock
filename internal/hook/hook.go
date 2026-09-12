@@ -211,7 +211,7 @@ func RunWith(ctx context.Context, opts Options) error {
 	}
 
 	unparsed := unparsedSources(docMap, files, newContentOf)
-	if len(unparsed) > 0 && (cfg.Behavior.ReportUnparsed || os.Getenv("DRIFTLOCK_DEBUG") != "") {
+	if len(unparsed) > 0 && (cfg.Behavior.ReportUnparsed || config.DebugEnabled()) {
 		for _, src := range unparsed {
 			if !opts.JSON {
 				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf(
@@ -323,7 +323,7 @@ func RunWith(ctx context.Context, opts Options) error {
 		if chunkNote != "" {
 			diffWithNote += "\n\n" + chunkNote
 		}
-		if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+		if config.DebugEnabled() {
 			fmt.Fprintf(os.Stderr, "[DEBUG] %s chunked doc: %d bytes (full: %d)\n", docPath, len(chunkedDoc), len(fullDoc))
 		}
 
@@ -363,7 +363,7 @@ func RunWith(ctx context.Context, opts Options) error {
 			cacheKey := cache.Key(cfg.LLM.Model, checkPrompt, diffWithNote, checkDoc)
 			if cached, ok := verdictCache.Get(cacheKey); ok {
 				result = checkResult{ok: cached.OK, explanation: cached.Explanation}
-				if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+				if config.DebugEnabled() {
 					fmt.Fprintf(os.Stderr, "[DEBUG] %s: cache hit\n", docPath)
 				}
 			} else if p, perr := ensureProvider(); perr != nil {
@@ -376,7 +376,7 @@ func RunWith(ctx context.Context, opts Options) error {
 					verdictCache.Set(cacheKey, cache.Entry{OK: result.ok, Explanation: result.explanation})
 				}
 			}
-		} else if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+		} else if config.DebugEnabled() {
 			fmt.Fprintf(os.Stderr, "[DEBUG] %s: decided without the model (%s)\n", docPath, mode)
 		}
 

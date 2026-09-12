@@ -123,3 +123,66 @@ func TestExampleConfigLoads(t *testing.T) {
 		t.Error("example has no doc_mapping")
 	}
 }
+
+// DRIFTLOCK_DEBUG follows the documented truthiness rule. The old check treated
+// any non-empty value as on, so the documented `DRIFTLOCK_DEBUG=0` enabled
+// verbose output and dumped raw LLM payloads on every commit.
+func TestDebugEnabled(t *testing.T) {
+	for _, on := range []string{"1", "true", "TRUE", "yes", "on", " on "} {
+		t.Run("on_"+on, func(t *testing.T) {
+			t.Setenv("DRIFTLOCK_DEBUG", on)
+			if !DebugEnabled() {
+				t.Errorf("DebugEnabled() = false for %q", on)
+			}
+		})
+	}
+	for _, off := range []string{"", "0", "false", "FALSE", "no", "off", "nonsense"} {
+		t.Run("off_"+off, func(t *testing.T) {
+			t.Setenv("DRIFTLOCK_DEBUG", off)
+			if DebugEnabled() {
+				t.Errorf("DebugEnabled() = true for %q", off)
+			}
+		})
+	}
+}
+
+// The shipped example must parse into the documented values now that inline
+// comments are stripped.
+func TestExampleDotEnvValues(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", ".env.example"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".env"), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"DRIFTLOCK_DEBUG", "DRIFTLOCK_SKIP", "DRIFTLOCK_STRICT_LLM", "DRIFTLOCK_API_KEY"} {
+		old, had := os.LookupEnv(k)
+		os.Unsetenv(k)
+		t.Cleanup(func() {
+			if had {
+				_ = os.Setenv(k, old)
+			} else {
+				_ = os.Unsetenv(k)
+			}
+		})
+	}
+
+	LoadDotEnv(dir)
+
+	cases := map[string]string{
+		"DRIFTLOCK_DEBUG":      "0",
+		"DRIFTLOCK_SKIP":       "false",
+		"DRIFTLOCK_STRICT_LLM": "false",
+		"DRIFTLOCK_API_KEY":    "your-api-key-here",
+	}
+	for k, want := range cases {
+		if got := os.Getenv(k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+	if DebugEnabled() {
+		t.Error("the example .env turns debugging on")
+	}
+}
