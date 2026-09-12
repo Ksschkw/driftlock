@@ -178,9 +178,19 @@ Controls how Driftlock acts once drift is detected.
 | `include_full_diff` | bool | `false` | Send the **full git diff** to the LLM instead of only the structural signature changes. More context, but more tokens. |
 | `cache` | bool | `true` | Enable the content-addressed verdict cache (`.driftlock/cache.json`). Identical `(model, diff, doc)` checks are never re-sent to the LLM. **On by default.** |
 | `report_unparsed` | bool | `false` | Warn when a mapped source file yields no structural signatures at all, which usually means the extractor did not understand it. Also always shown with `DRIFTLOCK_DEBUG=1`. |
+| `check_mode` | string | `"auto"` | How a check is decided: `auto` (deterministic when it can be, otherwise the LLM), `deterministic` (never call the LLM), or `llm` (always call it). |
 
 ### Notes
 
+- **`check_mode` decides whether the model is needed at all.** A string
+  comparison settles two kinds of change exactly: an *added* symbol the
+  documentation never mentions, and a *removed* symbol the documentation still
+  presents as existing. A *modified* signature that the documentation does
+  mention needs real judgement, so it goes to the model. `auto` uses the
+  deterministic answer whenever it is decisive and falls back otherwise;
+  `deterministic` never calls the model (undecidable changes are reported as
+  unjudged rather than guessed); `llm` always calls the model. A misspelled
+  value resolves to `auto`, so a typo cannot silently disable the model.
 - **`cache` defaults to `true`.** Omitting it, or setting `cache = true`, keeps caching on. Set `cache = false` to disable. See [Caching](./caching.md).
 - **`block_on_llm_error`** is a policy choice: `false` (default) favors developer flow (commit proceeds with a warning if the LLM is down); `true` favors strictness (never let a commit through unverified). CI often wants `true`.
 - **`include_full_diff`** trades cost for context. Leave it off unless the LLM struggles to judge drift from the structural diff alone. See [Providers → economics](./providers.md).
@@ -193,6 +203,8 @@ block_on_llm_error = false
 max_retries = 2
 include_full_diff = false
 cache = true
+check_mode = "auto"
+report_unparsed = false
 ```
 
 ---

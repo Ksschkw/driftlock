@@ -89,3 +89,37 @@ func TestLoadConfigCheckMode(t *testing.T) {
 		t.Errorf("loaded check mode = %q, want deterministic", got)
 	}
 }
+
+// The shipped example must actually load, and must exercise the documented
+// defaults. It is the first file a new user copies, so rot here is expensive.
+func TestExampleConfigLoads(t *testing.T) {
+	// LoadConfig loads a sibling .env; keep the repository's own .env from
+	// leaking into this process for the rest of the test binary.
+	for _, key := range []string{"DRIFTLOCK_SKIP", "DRIFTLOCK_DEBUG", "DRIFTLOCK_API_KEY"} {
+		old, had := os.LookupEnv(key)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if had {
+				_ = os.Setenv(key, old)
+			} else {
+				_ = os.Unsetenv(key)
+			}
+		})
+	}
+
+	cfg, err := LoadConfig(filepath.Join("..", "..", ".driftlock.example.toml"))
+	if err != nil {
+		t.Fatalf(".driftlock.example.toml does not load: %v", err)
+	}
+	if got := cfg.Behavior.ResolvedCheckMode(); got != CheckModeAuto {
+		t.Errorf("example check_mode = %q, want auto", got)
+	}
+	if got := cfg.LLM.HTTPTimeout(); got <= 0 {
+		t.Errorf("example LLM timeout = %v, want positive", got)
+	}
+	if len(cfg.DocMapping) == 0 {
+		t.Error("example has no doc_mapping")
+	}
+}

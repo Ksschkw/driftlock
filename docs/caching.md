@@ -71,6 +71,28 @@ rm .driftlock/cache.json
 
 The next run rebuilds it from scratch.
 
+## Deterministic-first: most checks cost nothing at all
+
+Before the cache is even consulted, Driftlock tries to settle the check without
+a model. Two kinds of structural change are decidable by string matching:
+
+- an **added** symbol the documentation never mentions is definitively
+  undocumented;
+- a **removed** symbol the documentation still presents as existing is
+  definitively stale;
+- a **modified** signature that is not mentioned at all is also definitive.
+
+Only a modified signature that the documentation *does* mention needs semantic
+judgement — matching text cannot tell whether the description still fits the new
+form. So `check_mode = "auto"` (the default) answers the common case instantly,
+for free, and reproducibly, and consults the model only when there is something
+a model is actually needed for. `check_mode = "deterministic"` never calls a
+model, which makes Driftlock usable with no API key at all.
+
+The cache and the deterministic path are complementary: the deterministic path
+avoids the call in the first place, and the cache avoids repeating a call that
+had to happen.
+
 ## The economic rationale
 
 Running a documentation check on *every* commit sounds expensive — but with the cache it is not:
@@ -79,6 +101,7 @@ Running a documentation check on *every* commit sounds expensive — but with th
 - Every identical check thereafter is **free**. Amend loops, interactive rebases, and CI retries — all common ways the same check runs many times — cost nothing after the first.
 - This **bounds** your token spend to roughly "one call per genuinely new `(code-change, doc, model)` combination," rather than "one call per commit attempt."
 
-Combined with structural-only diffs and smart chunking, the cache is why Driftlock can gate every commit without a meaningful cost.
+Combined with structural-only diffs, smart chunking, and the deterministic
+path, this is why Driftlock can gate every commit without a meaningful cost.
 
 See also: [Configuration → `[behavior]`](./configuration.md) · [Providers → economics](./providers.md) · [Architecture](./architecture.md) · [Troubleshooting → cache staleness](./troubleshooting.md).

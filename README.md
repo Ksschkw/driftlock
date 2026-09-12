@@ -194,6 +194,8 @@ block_on_llm_error = false
 max_retries = 2
 include_full_diff = false
 cache = true
+check_mode = "auto"
+report_unparsed = false
 ```
 
 - `auto_fix` – if `true`, rewrites documentation when drift is detected.
@@ -203,6 +205,7 @@ cache = true
 - `include_full_diff` – if `true`, sends the complete `git diff` to the LLM (uses more tokens).
 - `cache` – if `true` (default), caches verdicts so identical checks never re‑bill the LLM. See [Caching & Cost](#caching--cost).
 - `report_unparsed` – if `true`, warns when a mapped source file produces no structural signatures (a sign the extractor did not understand it). Off by default; the warning is always shown with `DRIFTLOCK_DEBUG=1`.
+- `check_mode` – `"auto"` (default) decides deterministically when it can and calls the LLM otherwise; `"deterministic"` never calls the LLM; `"llm"` always does. Added symbols that the docs never mention and removed symbols still documented are settled by string matching, with no token spend. See [Caching & Cost](#caching--cost).
 
 ### `audit`
 

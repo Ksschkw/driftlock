@@ -38,6 +38,9 @@ max_tokens = 4096
 auto_fix = true
 block_on_false = true
 max_retries = 2
+# How a check is decided: "auto" (deterministic when decisive, else the LLM),
+# "deterministic" (never call the LLM), or "llm" (always call it).
+check_mode = "auto"
 
 [audit]
 solana = false

@@ -23,6 +23,9 @@ Every check — whether triggered locally by the pre-commit hook or in CI by `dr
   mentioning the changed symbol names
         │
         ▼
+  deterministic verdict ──decisive──▶  verdict (no LLM call)
+        │ undecidable
+        ▼
   check cache  ──hit──▶  reuse verdict (no LLM call)
         │ miss
         ▼
@@ -51,15 +54,17 @@ Every check — whether triggered locally by the pre-commit hook or in CI by `dr
 
 5. **Smart chunking.** Rather than sending an entire Markdown file, Driftlock extracts only the **section(s) that mention the changed symbol names**. This is the "chunk-in" half of the round trip and the main cost saver.
 
-6. **Cache check.** The `(model, structural-diff, doc-chunk)` tuple is hashed into a cache key. A hit reuses the stored verdict with no LLM call. See [Caching](./caching.md).
+6. **Deterministic verdict.** Before spending anything, Driftlock tries to settle the check by string matching. An *added* symbol the documentation never mentions is definitively undocumented; a *removed* symbol still presented as existing is definitively stale; a *modified* signature that is not mentioned at all is definitive too. A modified signature the documentation *does* mention needs semantic judgement and is left to the model. `check_mode` controls this: `auto` (default) uses a decisive deterministic answer and falls back otherwise, `deterministic` never calls the model, `llm` ignores the shortcut.
 
-7. **LLM Check.** On a miss, the model is asked whether the doc chunk still reflects the changes. It answers `TRUE` (in sync) or `FALSE` (drifted) plus a one-sentence reason. The verdict is cached.
+7. **Cache check.** When the model is needed, the `(model, structural-diff, doc-chunk)` tuple is hashed into a cache key first. A hit reuses the stored verdict with no LLM call. See [Caching](./caching.md).
 
-8. **Auto-fix (optional).** If the verdict is `FALSE` and `auto_fix` is on, the LLM **rewrites the chunked sections**. The rewritten chunks are the "stitch-out" half: they are merged back into the full document by **exact heading match**, leaving every other section byte-for-byte unchanged. The commit is then **blocked** so the author can review and stage the rewrite — Driftlock never silently commits generated prose.
+8. **LLM Check.** On a miss, the model is asked whether the doc chunk still reflects the changes. It answers `TRUE` (in sync) or `FALSE` (drifted) plus a one-sentence reason. The verdict is cached.
 
-9. **Audit.** A SHA-256 of `(diff + doc)` is appended to `.driftlock/audit.jsonl`. If Solana auditing is enabled, the hash is also anchored on-chain.
+9. **Auto-fix (optional).** If the verdict is `FALSE` and `auto_fix` is on, the LLM **rewrites the chunked sections**. The rewritten chunks are the "stitch-out" half: they are merged back into the full document by **exact heading match**, leaving every other section byte-for-byte unchanged. The commit is then **blocked** so the author can review and stage the rewrite — Driftlock never silently commits generated prose.
 
-> In CI (`driftlock check`), the pipeline is **read-only**: steps 1–7 run, but nothing is written — no auto-fix, no file changes. The check simply passes or fails (exits non-zero on drift, unless `--report`). See [CI/CD](./ci-cd.md).
+10. **Audit.** A SHA-256 of `(diff + doc)` is appended to `.driftlock/audit.jsonl`. If Solana auditing is enabled, the hash is also anchored on-chain.
+
+> In CI (`driftlock check`), the pipeline is **read-only**: steps 1–8 run, but nothing is written — no auto-fix, no file changes. The check simply passes or fails (exits non-zero on drift, unless `--report`). See [CI/CD](./ci-cd.md).
 
 ---
 
@@ -140,6 +145,8 @@ These invariants are the load-bearing guarantees of the system:
 - **Chunk-in / stitch-out with exact-heading merge.** Only the doc sections mentioning changed symbols are sent to the LLM, and rewritten sections are merged back into the full document by **exact heading match**. Untouched sections are preserved verbatim. This bounds cost and prevents the LLM from rewriting parts of a doc it was never asked about.
 
 - **Language-dispatched, comment-stripped parsing.** Patterns are chosen by extension and run only over sanitized (comment/string-free) content, so drift is judged on the real API surface — never on tokens hiding in comments or string literals.
+
+- **Deterministic-first.** A check that a string comparison can settle is never sent to a model. Added symbols the documentation does not mention, and removed symbols it still presents, are decided locally, instantly, and reproducibly; only a modified signature the documentation mentions requires semantic judgement. See [Caching](./caching.md).
 
 - **Content-addressed caching.** Verdicts are memoized on `(model, structural-diff, doc-chunk)`. Identical checks never re-bill the LLM, and any change to code, docs, or model invalidates the key so stale verdicts are never served. See [Caching](./caching.md).
 

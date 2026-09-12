@@ -261,7 +261,7 @@ deterministic string check does perfectly, instantly, and for free.
 - [x] **M6.1 — Deterministic coverage check** for added/removed symbols.
 - [x] **M6.2 — `check_mode = auto|deterministic|llm`** config.
 - [x] **M6.3 — Skip the LLM when the deterministic verdict is decisive.**
-- [ ] **M6.4 — Tests and docs** for the modes and the cost story.
+- [x] **M6.4 — Tests and docs** for the modes and the cost story.
 
 ---
 
@@ -489,3 +489,7 @@ deterministic string check does perfectly, instantly, and for free.
   `internal/hook/deterministic_pipeline_test.go` (auto skips for added, uses the
   model for modified; deterministic works with no `[llm]` section; llm always
   calls the model).
+- **M6.4** — `check_mode` documented in README, docs/configuration.md,
+  docs/architecture.md (new pipeline stage + invariant), docs/caching.md (a
+  "deterministic-first" cost section), and `.driftlock.example.toml`.
+  `TestExampleConfigLoads` guards the example from rot.
