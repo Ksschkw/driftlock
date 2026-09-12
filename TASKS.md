@@ -99,7 +99,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ### M1.B — Symbol identity (overloads and same-named methods)
 
-- [ ] **M1.B.1 — Dedup by name+signature, not bare name.**
+- [x] **M1.B.1 — Dedup by name+signature, not bare name.**
   `parser/universal.go` currently drops every same-named declaration after the
   first (`seen[name]`). Two `Close()` methods on different receiver types
   collapse into one, so deleting one is misreported or missed entirely.
@@ -312,3 +312,6 @@ deterministic string check does perfectly, instantly, and for free.
 - **M1.A.8** — Rust return types (`-> T`) and `where` clauses are now part of
   the signature, with a closure-tolerant `rustParamList`. Tests:
   `internal/parser/rust_test.go`, `TestRustReturnTypeChangeIsModified`.
+- **M1.B.1** — Dedup now keys on `(name, signature)`, so same-named methods on
+  different receivers and overloads both survive extraction. Tests:
+  `internal/parser/symbols_test.go`.

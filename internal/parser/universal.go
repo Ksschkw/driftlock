@@ -10,8 +10,10 @@ import (
 // annotations, and applies only that language's structural patterns. Unknown
 // extensions fall back to a conservative universal code spec.
 //
-// Names are deduplicated within a file so each structural element appears once,
-// regardless of how many patterns happen to match it.
+// Duplicates are removed by (name, signature), not by name alone. Keying on the
+// bare name discarded every same-named declaration after the first, so a file
+// with `func (a *A) Close()` and `func (b *B) Close()` reported only one of
+// them and a change to the other was invisible.
 func extractSignatures(filePath, source string) []Signature {
 	spec := specForFile(filePath)
 	sanitized := sanitize(source, spec)
@@ -40,10 +42,6 @@ func extractSignatures(filePath, source string) []Signature {
 			if ignored[startLine] {
 				continue
 			}
-			if seen[name] {
-				continue
-			}
-			seen[name] = true
 			// The signature text comes from the ORIGINAL source (matching runs
 			// on the sanitized copy, whose string literals are blanked — using
 			// it would erase default values like `punctuation: str = "!"`).
@@ -60,7 +58,13 @@ func extractSignatures(filePath, source string) []Signature {
 					origSlice = origSlice[:cut]
 				}
 			}
-			sigs = append(sigs, Signature{Name: name, Signature: tidySignature(origSlice)})
+			sig := tidySignature(origSlice)
+			key := name + "\x00" + sig
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			sigs = append(sigs, Signature{Name: name, Signature: sig})
 		}
 	}
 	return sigs
