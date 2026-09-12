@@ -21,6 +21,9 @@ type verdictServer struct {
 	mu       sync.Mutex
 	requests []string
 	verdict  string
+	// fix, when set, is returned for auto-fix requests (recognised by the fix
+	// prompt) so the check and fix halves can be told apart.
+	fix string
 }
 
 func (v *verdictServer) start(t *testing.T) *httptest.Server {
@@ -36,9 +39,13 @@ func (v *verdictServer) start(t *testing.T) *httptest.Server {
 		for _, m := range body.Messages {
 			prompt.WriteString(m.Content)
 		}
+		text := prompt.String()
 		v.mu.Lock()
-		v.requests = append(v.requests, prompt.String())
+		v.requests = append(v.requests, text)
 		verdict := v.verdict
+		if v.fix != "" && strings.Contains(text, "Update the documentation") {
+			verdict = v.fix
+		}
 		v.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
@@ -96,26 +103,7 @@ func driftFixture(t *testing.T, endpoint string, blockOnLLMError bool) (string, 
 		"package src\n\nfunc Greet(name string) string { return name }\n")
 	write(t, filepath.Join(dir, "README.md"),
 		"# API\n\n## Greet\n\n`Greet(name)` returns a greeting.\n")
-	write(t, filepath.Join(dir, ".driftlock.toml"), strings.Join([]string{
-		`[[doc_mapping]]`,
-		`sources = ["src/**"]`,
-		`docs = ["README.md"]`,
-		``,
-		`[llm]`,
-		`driver = "openai-compatible"`,
-		`endpoint = "` + endpoint + `"`,
-		`model = "test-model"`,
-		`api_key = "test-key"`,
-		`timeout_seconds = 5`,
-		``,
-		`[behavior]`,
-		`auto_fix = false`,
-		`block_on_false = true`,
-		`block_on_llm_error = ` + boolLiteral(blockOnLLMError),
-		`max_retries = 0`,
-		`cache = false`,
-		``,
-	}, "\n"))
+	writeDriftlockConfig(t, dir, endpoint, false, blockOnLLMError)
 	runGit(t, dir, "add", ".")
 	runGit(t, dir, "commit", "-m", "base")
 	base := runGit(t, dir, "rev-parse", "HEAD")

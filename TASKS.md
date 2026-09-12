@@ -244,7 +244,7 @@ exists to prevent. **This milestone is the highest priority.**
   exit and why the pipeline is untestable. Return `ErrDrift`/`ErrLLM` and let
   `cmd/` choose the exit code.
 - [x] **M5.2 — Cache persistence independent of exit order.**
-- [ ] **M5.3 — Pipeline integration tests** with a fake `Provider` covering
+- [x] **M5.3 — Pipeline integration tests** with a fake `Provider` covering
   staged/range, report/json, block paths, and the M2 bugs.
 - [ ] **M5.4 — Fix or remove `driftlock status`.** It renders a full prompt and
   passes it as the `diff` argument, double-wrapping the check prompt, and reads
@@ -460,3 +460,8 @@ deterministic string check does perfectly, instantly, and for free.
   return path including a blocked commit. Test:
   `TestEndToEndVerdictCacheSurvivesBlockedCommit` asserts `cache.json` exists
   after a drift block.
+- **M5.3** — Pipeline tests for the paths the e2e suite did not cover: staged
+  mode blocks; staged auto-fix rewrites the doc, preserves the heading, and
+  still blocks for review; report mode never fails; and the JSON report is valid
+  JSON describing drift, mode, per-doc status, and changes. Tests:
+  `internal/hook/pipeline_test.go`.
