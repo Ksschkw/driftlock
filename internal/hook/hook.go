@@ -189,14 +189,13 @@ func RunWith(ctx context.Context, opts Options) error {
 		changedNames := publicNames(allChanges)
 
 		docFullPath := filepath.Join(root, docPath)
-		fullDocBytes, err := os.ReadFile(docFullPath)
+		fullDoc, err := readDocForCheck(root, docPath, opts.HeadRef, rangeMode)
 		if err != nil {
 			if !opts.JSON {
 				fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not read doc %s: %v\n", docPath, err)))
 			}
 			continue
 		}
-		fullDoc := string(fullDocBytes)
 
 		diffText := diff.FormatStructuralChanges(allChanges)
 		diffForLLM := diffText
@@ -349,6 +348,36 @@ func RunWith(ctx context.Context, opts Options) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// readDocForCheck returns the documentation content the check should judge.
+//
+// In staged mode this is the blob in the index — the exact content the commit
+// will contain. Reading the working tree instead was a correctness hole: the
+// source side of the diff is HEAD-vs-index, so editing a mapped doc without
+// staging it made Driftlock validate the edited copy while the commit landed
+// the stale one. Driftlock could therefore bless a commit it had never checked.
+//
+// In range mode the head ref is authoritative. In both modes an absent blob
+// (an untracked or newly created doc) falls back to the working tree.
+func readDocForCheck(root, docPath, headRef string, rangeMode bool) (string, error) {
+	if rangeMode {
+		head := headRef
+		if head == "" {
+			head = "HEAD"
+		}
+		if content, err := git.GetFileContentAtRefAt(root, head, docPath); err == nil && content != "" {
+			return content, nil
+		}
+	} else if content, err := git.GetStagedFileContentAt(root, docPath); err == nil && content != "" {
+		return content, nil
+	}
+
+	data, err := os.ReadFile(filepath.Join(root, docPath))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 // resolveSources returns the changed files and closures to read their old/new

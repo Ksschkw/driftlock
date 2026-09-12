@@ -7,6 +7,38 @@ import (
 	"strings"
 )
 
+// GetStagedFileContentAt returns the staged (index) content of filePath with
+// dir as the working directory. It exists so callers that resolved the project
+// root can address it explicitly instead of relying on the process CWD, which
+// is not necessarily the repository root (e.g. `driftlock check` run from a
+// subdirectory). Returns "" with an error when there is no index entry.
+func GetStagedFileContentAt(dir, filePath string) (string, error) {
+	cmd := exec.Command("git", "show", ":"+filePath)
+	cmd.Dir = dir
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git show :%s failed: %v\noutput: %s", filePath, err, out.String())
+	}
+	return out.String(), nil
+}
+
+// GetFileContentAtRefAt returns the content of filePath at an arbitrary ref,
+// running git in dir. Returns "" with an error when the file does not exist at
+// that ref.
+func GetFileContentAtRefAt(dir, ref, filePath string) (string, error) {
+	cmd := exec.Command("git", "show", ref+":"+filePath)
+	cmd.Dir = dir
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git show %s:%s failed: %v\noutput: %s", ref, filePath, err, out.String())
+	}
+	return out.String(), nil
+}
+
 // GetStagedDiff returns the output of 'git diff --cached' (unified diff).
 func GetStagedDiff() (string, error) {
 	cmd := exec.Command("git", "diff", "--cached", "-U5")

@@ -144,7 +144,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ### M2.A — Checked content must equal committed content
 
-- [ ] **M2.A.1 — Read docs from the git index in staged mode.**
+- [x] **M2.A.1 — Read docs from the git index in staged mode.**
   `hook.go` reads the doc with `os.ReadFile` (working tree) while source content
   comes from HEAD vs the index. Editing a doc without staging it lets the
   commit land a stale doc that Driftlock never checked. Read the staged blob
@@ -328,3 +328,8 @@ deterministic string check does perfectly, instantly, and for free.
   `.env` before reading `DRIFTLOCK_SKIP`. The repo's own `.env`
   (`DRIFTLOCK_SKIP=true`) previously did nothing. First tests in
   `internal/hook`: `skip_test.go`.
+- **M2.A.1** — `readDocForCheck` reads the index blob in staged mode and the
+  head-ref blob in range mode, falling back to disk only for untracked docs.
+  Added root-aware `git.GetStagedFileContentAt` / `GetFileContentAtRefAt` so
+  git runs at the project root rather than the process CWD. Tests:
+  `internal/hook/docread_test.go`.
