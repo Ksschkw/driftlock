@@ -66,6 +66,11 @@ const paramListNoSemi = `\((?:[^;()]|\([^;()]*\))*\)`
 // permitted so `x=len(y)` does not truncate the list.
 const pyParamList = `\((?:[^()]|\([^()]*\))*\)`
 
+// rustParamList matches a Rust parameter list. A parameter may be a closure
+// type (`f: impl Fn(i32) -> i32`), so one level of nested parentheses is
+// tolerated; `;` and braces cannot appear in a parameter list.
+const rustParamList = `\((?:[^;{}()]|\([^;{}()]*\))*\)`
+
 var (
 	pCFunc = regexp.MustCompile(
 		`(?m)^[\t ]*(?:(?:static|inline|virtual|explicit|export|constexpr|noexcept|\[\[[^]]+\]\])\s+)*` +
@@ -104,7 +109,10 @@ var (
 	pPyDef   = regexp.MustCompile(`(?m)^[\t ]*(?:async\s+)?def\s+(\w+)\s*` + pyParamList + `\s*(?:->\s*[^:\n]+)?`)
 	pPyClass = regexp.MustCompile(`(?m)^[\t ]*class\s+(\w+)`)
 
-	pRustFn   = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:const\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*\(([\s\S]*?)\)`)
+	// pRustFn includes the optional return type (`-> Result<(), Error>`) and a
+	// trailing `where` clause. The return type was omitted previously, so
+	// changing `-> i32` to `-> String` produced no structural change at all.
+	pRustFn   = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:unsafe\s+)?(?:const\s+)?fn\s+(\w+)\s*(?:<[^>]*>)?\s*` + rustParamList + `\s*(?:->\s*[^;{]+)?(?:\s*where\s+[^{;]+)?\s*\{?`)
 	pRustType = regexp.MustCompile(`(?m)^[\t ]*(?:pub(?:\([^)]*\))?\s+)?(struct|enum|trait|union|impl|type)\s+(\w+)`)
 
 	pArrowFn  = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*(?::\s*[^=]+)?=\s*(?:async\s+)?\(?([^)=]*)\)?\s*=>`)

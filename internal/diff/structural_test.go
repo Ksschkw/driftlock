@@ -76,3 +76,17 @@ func TestPythonReturnTypeChangeIsModified(t *testing.T) {
 		t.Errorf("modified signature does not show the new return type: %q", got[0].NewSig)
 	}
 }
+
+// A Rust return-type change must register as one modified signature.
+func TestRustReturnTypeChangeIsModified(t *testing.T) {
+	oldSrc := "pub fn parse(s: &str) -> i32 { 0 }\n"
+	newSrc := "pub fn parse(s: &str) -> String { String::new() }\n"
+	changes := ExtractStructuralChanges("lib.rs", oldSrc, newSrc)
+	got := changeByKind(changes, "modified")
+	if len(got) != 1 {
+		t.Fatalf("expected 1 modified for a return-type change, got %v", changes)
+	}
+	if !strings.Contains(got[0].NewSig, "-> String") {
+		t.Errorf("modified signature does not show the new return type: %q", got[0].NewSig)
+	}
+}

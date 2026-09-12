@@ -82,7 +82,7 @@ exists to prevent. **This milestone is the highest priority.**
   set language-specific.
   *Accept:* dict/set defaults and `lambda` defaults are preserved verbatim.
 
-- [ ] **M1.A.8 — Rust return types.**
+- [x] **M1.A.8 — Rust return types.**
   `-> i32` changing to `-> String` currently produces **zero** changes. Include
   the return type (and tolerate `where` clauses).
   *Accept:* a Rust return-type change produces one `modified` change.
@@ -309,3 +309,6 @@ deterministic string check does perfectly, instantly, and for free.
   brace/semicolon cut is skipped for Python/Ruby, and a nested-paren-tolerant
   `pyParamList`. `def f(x: dict = {})` no longer truncates. Test:
   `TestPythonDefaultsWithBracesDoNotTruncate`.
+- **M1.A.8** — Rust return types (`-> T`) and `where` clauses are now part of
+  the signature, with a closure-tolerant `rustParamList`. Tests:
+  `internal/parser/rust_test.go`, `TestRustReturnTypeChangeIsModified`.
