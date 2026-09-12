@@ -258,7 +258,7 @@ exists to prevent. **This milestone is the highest priority.**
 The LLM is currently used as a coverage checker for the common case, which a
 deterministic string check does perfectly, instantly, and for free.
 
-- [ ] **M6.1 — Deterministic coverage check** for added/removed symbols.
+- [x] **M6.1 — Deterministic coverage check** for added/removed symbols.
 - [ ] **M6.2 — `check_mode = auto|deterministic|llm`** config.
 - [ ] **M6.3 — Skip the LLM when the deterministic verdict is decisive.**
 - [ ] **M6.4 — Tests and docs** for the modes and the cost story.
@@ -474,3 +474,7 @@ deterministic string check does perfectly, instantly, and for free.
   injected drifted run, a deleted source (skipped, no model call), and an
   unparsable source reported in the JSON `unparsed` field. Tests:
   `internal/hook/source_test.go`.
+- **M6.1** — `deterministicVerdict` decides added/removed symbols by string
+  matching (and modified ones when undocumented), returning `(ok, decisive,
+  reason)` so the caller knows when a model is genuinely needed. Not yet wired
+  into the pipeline. Tests: `internal/hook/decide_test.go`.
