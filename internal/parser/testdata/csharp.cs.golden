@@ -1,0 +1,5 @@
+All	List<Item> All()
+Count	int Count => items.Count
+Name	public string Name
+Repo	public class Repo
+Save	void Save(int id) => store.Put(id)

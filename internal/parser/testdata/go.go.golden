@@ -1,0 +1,7 @@
+Apply	func Apply(xs []int, f func(int) int) []int
+Long	func Long( a int, b string, ) (string, error)
+Map	func Map[T any, U any](xs []T, f func(T) U) []U
+Pop	func (s *Stack[T]) Pop() (T, bool)
+Push	func (s *Stack[T]) Push(v T)
+Set	type Set[T comparable] map
+Stack	type Stack[T any] struct

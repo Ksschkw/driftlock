@@ -105,6 +105,17 @@ exists to prevent. **This milestone is the highest priority.**
   constructor was invisible. *Accept:* lifetime-bearing functions extract with
   full signatures; `fn new()` is a symbol; statement guards still apply.
 
+- [ ] **M1.A.12 — Public-API filtering.** The parser extracts every
+  declaration, including private ones: Python `_private`/`__init__` and Go
+  unexported names survive into the structural diff, so an internal refactor can
+  trigger a documentation block. The README claims only public signatures are
+  considered. *Accept:* Go unexported, Python `_`-prefixed, and non-`pub` Rust
+  declarations are excluded from structural changes.
+- [ ] **M1.A.13 — Go type-expression fidelity.** `type Set[T comparable]
+  map[T]struct{}` is captured as `type Set[T comparable] map`, so a change to
+  the element type is invisible. *Accept:* the full type expression is part of
+  the signature for map/slice/chan/array types.
+
 ### M1.B — Symbol identity (overloads and same-named methods)
 
 - [x] **M1.B.1 — Dedup by name+signature, not bare name.**
@@ -130,7 +141,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ### M1.C — Evidence and diagnostics
 
-- [ ] **M1.C.1 — Golden-corpus harness.**
+- [x] **M1.C.1 — Golden-corpus harness.**
   A table-driven test that reads `<lang>.<ext>` pairs from `testdata/` and
   compares extracted signatures against a golden file, with an update flag.
   *Accept:* adding a corpus file without a golden fails loudly.
@@ -374,3 +385,7 @@ deterministic string check does perfectly, instantly, and for free.
   chunking no longer degrades to the whole document. Rust `impl` blocks are no
   longer emitted as symbols. Tests: `internal/hook/name_test.go`,
   `TestFormatShowsQualifiedName`.
+- **M1.C.1** — Golden-corpus harness (`internal/parser/golden_test.go`) with
+  `-update`, plus 10 corpus files (Go, Python, TS, Java, Rust, Kotlin, Swift,
+  C#, SQL, YAML) and their goldens. A corpus file without a golden fails
+  loudly. Reviewing the generated goldens exposed M1.A.12 and M1.A.13.

@@ -1,0 +1,3 @@
+active_users	CREATE OR REPLACE VIEW active_users
+idx_users_name	CREATE INDEX idx_users_name
+users	CREATE TABLE users

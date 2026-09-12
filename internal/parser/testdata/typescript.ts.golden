@@ -1,0 +1,10 @@
+ID	export type ID
+Service	export class Service
+User	export interface User
+constructor	constructor(private readonly url: string)
+create	public static async create(url: string): Promise<Service>
+format	private format(x: number)
+makeUser	export function makeUser(name: string)
+onClick	onClick(event)
+run	run(x: number): string
+size	get size()

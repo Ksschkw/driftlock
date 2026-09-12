@@ -1,0 +1,9 @@
+Calculator	Calculator(int seed)
+Calculator	public class Calculator
+Shape	public interface Shape
+add	int add(int a, int b)
+area	double area()
+area	public double area()
+log	private void log(String msg)
+sides	int sides()
+sides	public int sides()

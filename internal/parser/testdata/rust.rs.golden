@@ -1,0 +1,6 @@
+Foo.put	pub fn put(&self, value: T) -> Result<(), Error>
+Gadget.build	pub fn build() -> Self
+Holder	pub struct Holder
+Widget.build	pub fn build() -> Self
+Widget.new	pub fn new() -> Self
+get	pub fn get<'a>(x: &'a str) -> &'a str
