@@ -28,6 +28,13 @@ type langSpec struct {
 // pattern never runs against a Go file. Each pattern's first (or keyword+name)
 // capture group yields the symbol name; see extractNameAndFull.
 
+// tsParamList matches a parenthesised parameter list for JS/TS-style
+// declarations. It forbids a top-level ';' so a declaration pattern can never
+// leap across statements to find a later '{' (which made `doSomething(event);`
+// bind to a following anonymous-function body). One level of nested
+// parentheses is permitted, covering default values such as `cb = () => {}`.
+const tsParamList = `\((?:[^;()]|\([^;()]*\))*\)`
+
 var (
 	pCFunc = regexp.MustCompile(
 		`(?m)^[\t ]*(?:(?:static|inline|virtual|explicit|export|constexpr|noexcept|\[\[[^]]+\]\])\s+)*` +
@@ -68,7 +75,13 @@ var (
 	pArrowFn  = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*(?::\s*[^=]+)?=\s*(?:async\s+)?\(?([^)=]*)\)?\s*=>`)
 	pFuncKw   = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s+(\w+)\s*\(([\s\S]*?)\)`)
 	pTsType   = regexp.MustCompile(`(?m)^[\t ]*(?:export\s+)?(?:declare\s+)?(?:type|interface|enum)\s+(\w+)`)
-	pTsMethod = regexp.MustCompile(`(?m)^[\t ]*(?:public|private|protected|readonly|static|async|get|set)\s+(\w+)\s*\(([\s\S]*?)\)\s*(?::\s*[\w\[\]<>., |]+)?\s*\{`)
+	pTsMethod = regexp.MustCompile(`(?m)^[\t ]*(?:(?:public|private|protected|readonly|static|async|get|set|abstract|override)\s+)+(\w+)\s*(?:<[^>]*>)?\s*` + tsParamList + `\s*(?::\s*[^;{]+)?\s*\{`)
+	// pTsBareMethod matches a class/object method with NO access modifier —
+	// the dominant style in TypeScript and JavaScript (`run(x) { … }`),
+	// which pTsMethod misses because it requires a modifier word. The trailing
+	// `{` is what separates a declaration from a call (`foo(x);`), and
+	// statement keywords are filtered by isIgnoredKeyword.
+	pTsBareMethod = regexp.MustCompile(`(?m)^[\t ]*(\w+)\s*(?:<[^>]*>)?\s*` + tsParamList + `\s*(?::\s*[^;{]+)?\s*\{`)
 
 	pJavaMethod = regexp.MustCompile(
 		`(?m)^[\t ]*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:public|private|protected|internal|static|final|abstract|override|virtual|async|synchronized|native|default)\s+)+` +
@@ -113,12 +126,12 @@ var registry = map[string]langSpec{
 	"javascript": {
 		name: "javascript", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"`", "\"", "'"},
-		patterns:     []*regexp.Regexp{pFuncKw, pArrowFn, pTsType, pTsMethod, pClassGroup},
+		patterns:     []*regexp.Regexp{pFuncKw, pArrowFn, pTsType, pTsMethod, pTsBareMethod, pClassGroup},
 	},
 	"typescript": {
 		name: "typescript", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"`", "\"", "'"},
-		patterns:     []*regexp.Regexp{pFuncKw, pArrowFn, pTsType, pTsMethod, pClassGroup},
+		patterns:     []*regexp.Regexp{pFuncKw, pArrowFn, pTsType, pTsMethod, pTsBareMethod, pClassGroup},
 	},
 	"java": {
 		name: "java", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},

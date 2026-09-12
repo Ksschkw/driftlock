@@ -51,7 +51,7 @@ exists to prevent. **This milestone is the highest priority.**
   list before the kind keyword.
   *Accept:* `type Stack[T any] struct`, `type Set[T comparable] map[T]struct{}`.
 
-- [ ] **M1.A.3 — TypeScript/JavaScript class methods without modifiers.**
+- [x] **M1.A.3 — TypeScript/JavaScript class methods without modifiers.**
   `class S { run(x: number) { … } }` currently yields only `S`. Add a pattern
   for unmodified class/object methods that requires a body brace, and keep
   control-flow keywords filtered.
@@ -281,3 +281,8 @@ deterministic string check does perfectly, instantly, and for free.
 - **M1.A.2** — Go generic type declarations (`type Stack[T any] struct`,
   `type Set[T comparable] map[T]struct{}`, generic interfaces). Test:
   `TestGoGenericTypeDeclaration`.
+- **M1.A.3** — TypeScript/JavaScript methods without modifiers, plus
+  multi-modifier methods (`public static`). Added `pTsBareMethod`, made the
+  `pTsMethod` modifier group repeatable, and introduced a `;`-free parameter
+  list so a declaration can never bind to a later anonymous-function body.
+  Tests: `internal/parser/typescript_test.go`.
