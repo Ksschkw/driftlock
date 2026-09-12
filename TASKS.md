@@ -214,7 +214,7 @@ exists to prevent. **This milestone is the highest priority.**
   `pre-commit.driftlock-backup` with a printed note.
 - [x] **M3.4 — Idempotent re-init.** A second `init` must not double-install or
   destroy its own prior work.
-- [ ] **M3.5 — PATH detection.** Warn when `driftlock` is not resolvable,
+- [x] **M3.5 — PATH detection.** Warn when `driftlock` is not resolvable,
   since the hook shells out to it.
 - [ ] **M3.6 — Tests for every install path** (absent hook, foreign hook,
   husky `hooksPath`, re-init).
@@ -420,3 +420,5 @@ deterministic string check does perfectly, instantly, and for free.
 - **M3.4** — Install is idempotent: the `# driftlock:begin` marker is detected
   and the file is left byte-for-byte unchanged. Tests:
   `TestInstallHookIsIdempotent`, `TestInstallHookIsIdempotentWithForeignHook`.
+- **M3.5** — `driftlockOnPath` warns at install time when the binary the hook
+  invokes is not resolvable. Test: `TestDriftlockOnPath`.

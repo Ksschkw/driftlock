@@ -212,3 +212,23 @@ func TestInstallHookIsIdempotentWithForeignHook(t *testing.T) {
 		t.Errorf("foreign content lost on re-install:\n%s", second)
 	}
 }
+
+// The hook invokes `driftlock` by name, so install must notice when it is not
+// resolvable rather than leaving the user with failing or no-op commits.
+func TestDriftlockOnPath(t *testing.T) {
+	empty := t.TempDir()
+	t.Setenv("PATH", empty)
+	if driftlockOnPath() {
+		t.Fatal("driftlockOnPath() = true with an empty PATH")
+	}
+
+	bin := t.TempDir()
+	stub := filepath.Join(bin, "driftlock")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	if !driftlockOnPath() {
+		t.Fatal("driftlockOnPath() = false with a stub on PATH")
+	}
+}

@@ -72,6 +72,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(note)
 	}
 
+	// The hook runs `driftlock hook-run` by name. If the binary is not
+	// resolvable, a fresh install makes every commit fail and a chained install
+	// silently skips the check — both worth saying out loud at install time.
+	if !driftlockOnPath() {
+		fmt.Println()
+		fmt.Println("warning: 'driftlock' was not found on your PATH.")
+		fmt.Println("The installed hook invokes `driftlock hook-run`, so commits will fail")
+		fmt.Println("(fresh hook) or skip the check (chained hook) until the binary is")
+		fmt.Println("resolvable. Install it with `go install` or the release binary, then")
+		fmt.Println("add its directory to PATH.")
+	}
+
 	// Update .gitignore. Always ignore local state (.driftlock/) and secrets
 	// (.env). Only ignore .driftlock.toml itself when it still holds a literal
 	// key — otherwise leave it committable so teams share one policy file.
@@ -91,6 +103,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(".driftlock/ are gitignored.")
 	}
 	return nil
+}
+
+// driftlockOnPath reports whether the driftlock binary can be resolved by name,
+// which is how the installed hook invokes it.
+func driftlockOnPath() bool {
+	_, err := exec.LookPath("driftlock")
+	return err == nil
 }
 
 // Markers around the snippet Driftlock owns, so a later run can recognize its
