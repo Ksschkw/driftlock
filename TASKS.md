@@ -206,7 +206,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ## M3 — `init` must not be destructive
 
-- [ ] **M3.1 — Honor `core.hooksPath`.** Write the hook where git actually
+- [x] **M3.1 — Honor `core.hooksPath`.** Write the hook where git actually
   looks, not blindly to `.git/hooks/`.
 - [ ] **M3.2 — Chain an existing pre-commit hook.** Append the Driftlock call
   to a foreign hook (husky, lint-staged, pre-commit) instead of overwriting it.
@@ -407,3 +407,6 @@ deterministic string check does perfectly, instantly, and for free.
   Trailing comments are trimmed from all signatures. Tests:
   `TestGoTypeExpressionFidelity`, `TestGoStructBodyExcludedFromSignature`,
   `TestGoTypeTrailingCommentExcluded`.
+- **M3.1** — `hooksDir` resolves git's `core.hooksPath` (relative to the root,
+  or absolute) and falls back to `.git/hooks`. Tests:
+  `cmd/driftlock/hooksdir_test.go`.

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -63,7 +64,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Install pre-commit hook.
-	hooksPath := filepath.Join(root, ".git", "hooks")
+	hooksPath, err := hooksDir(root)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(hooksPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create hooks directory: %w", err)
 	}
@@ -92,6 +96,25 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(".driftlock/ are gitignored.")
 	}
 	return nil
+}
+
+// hooksDir returns the directory git actually reads pre-commit hooks from.
+//
+// Git's `core.hooksPath` setting overrides `.git/hooks`. Ignoring it — as init
+// did — writes a hook that git never executes, so Driftlock appears installed
+// while doing nothing at all. That is the normal case in any repository using
+// husky or a shared hooks directory.
+func hooksDir(root string) (string, error) {
+	out, err := exec.Command("git", "-C", root, "config", "--get", "core.hooksPath").Output()
+	if err == nil {
+		if configured := strings.TrimSpace(string(out)); configured != "" {
+			if !filepath.IsAbs(configured) {
+				configured = filepath.Join(root, configured)
+			}
+			return configured, nil
+		}
+	}
+	return filepath.Join(root, ".git", "hooks"), nil
 }
 
 // isLiteralSecret reports whether an api_key value is a real secret that must
