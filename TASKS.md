@@ -260,7 +260,7 @@ deterministic string check does perfectly, instantly, and for free.
 
 - [x] **M6.1 — Deterministic coverage check** for added/removed symbols.
 - [x] **M6.2 — `check_mode = auto|deterministic|llm`** config.
-- [ ] **M6.3 — Skip the LLM when the deterministic verdict is decisive.**
+- [x] **M6.3 — Skip the LLM when the deterministic verdict is decisive.**
 - [ ] **M6.4 — Tests and docs** for the modes and the cost story.
 
 ---
@@ -482,3 +482,10 @@ deterministic string check does perfectly, instantly, and for free.
   with `ResolvedCheckMode()`; an unset or misspelled value resolves to `auto`
   so a typo cannot silently disable the model. Tests:
   `TestResolvedCheckMode`, `TestLoadConfigCheckMode`.
+- **M6.3** — The pipeline consults the deterministic verdict first and only
+  falls back to the model when it is not decisive; `check_mode=llm` always calls
+  the model and `deterministic` never does. The provider is now created lazily,
+  so deterministic runs need no LLM configuration at all. Tests:
+  `internal/hook/deterministic_pipeline_test.go` (auto skips for added, uses the
+  model for modified; deterministic works with no `[llm]` section; llm always
+  calls the model).

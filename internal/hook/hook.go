@@ -220,9 +220,20 @@ func RunWith(ctx context.Context, opts Options) error {
 		}
 	}
 
-	provider, err := llm.NewProvider(cfg.LLM, cfg.LLM.Prompts)
-	if err != nil {
-		return fmt.Errorf("failed to create LLM provider: %w", err)
+	// The provider is created lazily: a deterministic verdict (or a check_mode
+	// of "deterministic") never needs it, so a repository without any LLM
+	// configuration can run the common cases without an adapter.
+	var (
+		provider     types.Provider
+		providerErr  error
+		providerMade bool
+	)
+	ensureProvider := func() (types.Provider, error) {
+		if !providerMade {
+			providerMade = true
+			provider, providerErr = llm.NewProvider(cfg.LLM, cfg.LLM.Prompts)
+		}
+		return provider, providerErr
 	}
 
 	// Verdicts are persisted however RunWith returns — success, drift, an LLM
@@ -318,27 +329,55 @@ func RunWith(ctx context.Context, opts Options) error {
 
 		dr := DocResult{Doc: docPath, Changes: summarizeChanges(allChanges)}
 
-		// Consult the cache before spending tokens. The check prompt is part
-		// of the key: improving the prompt must invalidate verdicts produced by
-		// the old one (a nil Prompts means the built-in default is used).
-		checkPrompt := types.DefaultPrompts().Check
-		if cfg.LLM.Prompts != nil && cfg.LLM.Prompts.Check != "" {
-			checkPrompt = cfg.LLM.Prompts.Check
-		}
-		cacheKey := cache.Key(cfg.LLM.Model, checkPrompt, diffWithNote, checkDoc)
+		// Decide without the model when the change set allows it. A string
+		// comparison settles "an added symbol is undocumented" and "a removed
+		// symbol is still documented" exactly, for free and reproducibly; only
+		// a modified signature that the documentation does mention needs
+		// semantic judgement.
+		mode := cfg.Behavior.ResolvedCheckMode()
+		detOK, detDecisive, detReason := deterministicVerdict(allChanges, fullDoc)
+
 		var result checkResult
-		if cached, ok := verdictCache.Get(cacheKey); ok {
-			result = checkResult{ok: cached.OK, explanation: cached.Explanation}
-			if os.Getenv("DRIFTLOCK_DEBUG") != "" {
-				fmt.Fprintf(os.Stderr, "[DEBUG] %s: cache hit\n", docPath)
+		useLLM := false
+		switch {
+		case mode == config.CheckModeLLM:
+			useLLM = true
+		case detDecisive:
+			result = checkResult{ok: detOK, explanation: detReason}
+		case mode == config.CheckModeDeterministic:
+			// Deterministic mode cannot judge a mentioned modified signature.
+			// Report it as unjudged rather than guessing either way.
+			result = checkResult{ok: true, explanation: "check_mode=deterministic: modified signatures were not judged"}
+		default: // auto, undecidable
+			useLLM = true
+		}
+
+		if useLLM {
+			// Consult the cache before spending tokens. The check prompt is part
+			// of the key: improving the prompt must invalidate verdicts produced
+			// by the old one (a nil Prompts means the built-in default is used).
+			checkPrompt := types.DefaultPrompts().Check
+			if cfg.LLM.Prompts != nil && cfg.LLM.Prompts.Check != "" {
+				checkPrompt = cfg.LLM.Prompts.Check
 			}
-		} else {
-			checkCtx, cancelCheck := context.WithTimeout(ctx, perCheckBudget(cfg))
-			result = checkDocWithRetry(checkCtx, provider, cfg.Behavior.MaxRetries, diffWithNote, checkDoc)
-			cancelCheck()
-			if result.err == nil {
-				verdictCache.Set(cacheKey, cache.Entry{OK: result.ok, Explanation: result.explanation})
+			cacheKey := cache.Key(cfg.LLM.Model, checkPrompt, diffWithNote, checkDoc)
+			if cached, ok := verdictCache.Get(cacheKey); ok {
+				result = checkResult{ok: cached.OK, explanation: cached.Explanation}
+				if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+					fmt.Fprintf(os.Stderr, "[DEBUG] %s: cache hit\n", docPath)
+				}
+			} else if p, perr := ensureProvider(); perr != nil {
+				result = checkResult{err: fmt.Errorf("failed to create LLM provider: %w", perr)}
+			} else {
+				checkCtx, cancelCheck := context.WithTimeout(ctx, perCheckBudget(cfg))
+				result = checkDocWithRetry(checkCtx, p, cfg.Behavior.MaxRetries, diffWithNote, checkDoc)
+				cancelCheck()
+				if result.err == nil {
+					verdictCache.Set(cacheKey, cache.Entry{OK: result.ok, Explanation: result.explanation})
+				}
 			}
+		} else if os.Getenv("DRIFTLOCK_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "[DEBUG] %s: decided without the model (%s)\n", docPath, mode)
 		}
 
 		if result.err != nil {
@@ -373,7 +412,13 @@ func RunWith(ctx context.Context, opts Options) error {
 		}
 
 		if !result.ok && cfg.Behavior.AutoFix && !dryRun && !noFix && !opts.Report {
-			updatedSections, ferr := provider.Fix(ctx, diffWithNote, chunkedDoc)
+			var updatedSections string
+			var ferr error
+			if p, perr := ensureProvider(); perr != nil {
+				ferr = fmt.Errorf("failed to create LLM provider: %w", perr)
+			} else {
+				updatedSections, ferr = p.Fix(ctx, diffWithNote, chunkedDoc)
+			}
 			if ferr != nil {
 				if !opts.JSON {
 					fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("auto-fix failed for %s: %v\n", docPath, ferr)))
