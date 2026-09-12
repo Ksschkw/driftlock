@@ -258,3 +258,39 @@ func TestEndToEndLenientConfigAllowsProviderError(t *testing.T) {
 		t.Fatalf("a lenient config should allow the run, got %v", err)
 	}
 }
+
+// The verdict cache must be written even when the run ends in a blocked commit.
+// That is the case the cache exists for: the author stages the fixed doc and
+// re-commits, and the re-check should reuse the verdict rather than re-bill the
+// model. The save used to sit on the success path only and os.Exit skipped
+// defers; with typed errors it is deferred and unconditional.
+func TestEndToEndVerdictCacheSurvivesBlockedCommit(t *testing.T) {
+	unsetEnv(t, "DRIFTLOCK_SKIP")
+
+	stub := &verdictServer{verdict: "FALSE. The documentation is stale."}
+	srv := stub.start(t)
+
+	dir, base, head := driftFixture(t, srv.URL, true)
+	t.Chdir(dir)
+
+	// Enable the verdict cache for this run (the shared fixture disables it).
+	cfgPath := filepath.Join(dir, ".driftlock.toml")
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, cfgPath, strings.Replace(string(data), "cache = false", "cache = true", 1))
+
+	if err := RunWith(context.Background(), Options{BaseRef: base, HeadRef: head}); !errors.Is(err, ErrDrift) {
+		t.Fatalf("expected ErrDrift, got %v", err)
+	}
+
+	cachePath := filepath.Join(dir, ".driftlock", "cache.json")
+	info, err := os.Stat(cachePath)
+	if err != nil {
+		t.Fatalf("verdict cache was not persisted on the blocked path: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("verdict cache is empty")
+	}
+}

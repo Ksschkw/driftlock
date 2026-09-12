@@ -243,7 +243,7 @@ exists to prevent. **This milestone is the highest priority.**
   `os.Exit(1)`, which is why the cache save had to be hand-placed before every
   exit and why the pipeline is untestable. Return `ErrDrift`/`ErrLLM` and let
   `cmd/` choose the exit code.
-- [ ] **M5.2 — Cache persistence independent of exit order.**
+- [x] **M5.2 — Cache persistence independent of exit order.**
 - [ ] **M5.3 — Pipeline integration tests** with a fake `Provider` covering
   staged/range, report/json, block paths, and the M2 bugs.
 - [ ] **M5.4 — Fix or remove `driftlock status`.** It renders a full prompt and
@@ -456,3 +456,7 @@ deterministic string check does perfectly, instantly, and for free.
 - **M5.1** — `internal/hook` no longer calls `os.Exit`; it returns sentinel
   `ErrDrift` / `ErrLLMUnreachable` and lets `cmd/` choose the exit code, so
   defers run and the pipeline is testable. Tests assert with `errors.Is`.
+- **M5.2** — The verdict cache is saved by a `defer`, so it persists on every
+  return path including a blocked commit. Test:
+  `TestEndToEndVerdictCacheSurvivesBlockedCommit` asserts `cache.json` exists
+  after a drift block.

@@ -192,10 +192,16 @@ func RunWith(ctx context.Context, opts Options) error {
 		return fmt.Errorf("failed to create LLM provider: %w", err)
 	}
 
-	// Verdicts are persisted before RunWith returns so the retry after the
-	// author stages the updated docs hits the cache instead of re-billing the
-	// LLM. A blocked commit is exactly when a fresh verdict must survive.
+	// Verdicts are persisted however RunWith returns — success, drift, an LLM
+	// failure, report mode — because the save is deferred. A blocked commit is
+	// exactly when a fresh verdict must survive: the retry after the author
+	// stages the updated docs should hit the cache, not re-bill the LLM.
 	verdictCache := cache.Load(root, cfg.Behavior.CacheEnabled())
+	defer func() {
+		if err := verdictCache.Save(); err != nil && !opts.JSON {
+			fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not save verdict cache: %v\n", err)))
+		}
+	}()
 
 	var fullDiff string
 	if cfg.Behavior.IncludeFullDiff {
@@ -382,10 +388,6 @@ func RunWith(ctx context.Context, opts Options) error {
 		printJSON(report)
 	} else {
 		printTextSummary(anyStructuralChanges, anyOutOfSync, anyLLMError, llmFailedDocs, cfg, dryRun)
-	}
-
-	if err := verdictCache.Save(); err != nil && !opts.JSON {
-		fmt.Fprint(os.Stderr, output.YellowStr(fmt.Sprintf("warning: could not save verdict cache: %v\n", err)))
 	}
 
 	// Report mode is purely informational.
