@@ -97,6 +97,14 @@ exists to prevent. **This milestone is the highest priority.**
   where the language declares them inline.
   *Accept:* a return-type change produces one `modified` change per language.
 
+- [x] **M1.A.11 — Rust lifetimes and the `new` keyword.**
+  Two independent Rust false negatives found while testing M1.A.9:
+  (a) `pub fn get<'a>(x: &'a str) -> &'a str` extracted **nothing**, because the
+  sanitizer treats `'` as a char-literal delimiter and blanked the code between
+  lifetimes; (b) `fn new()` was dropped as a keyword, so the standard Rust
+  constructor was invisible. *Accept:* lifetime-bearing functions extract with
+  full signatures; `fn new()` is a symbol; statement guards still apply.
+
 ### M1.B — Symbol identity (overloads and same-named methods)
 
 - [x] **M1.B.1 — Dedup by name+signature, not bare name.**
@@ -355,3 +363,8 @@ deterministic string check does perfectly, instantly, and for free.
   scan, and generic/trait impls (`impl<T> Trait for Foo<T>`) parse. Tests:
   `TestRustImplMethodsAreScopedByType`, `TestRustGenericTraitImplScope`,
   `TestRustFreeFunctionStaysUnqualified`.
+- **M1.A.11** — Rust string delimiters no longer include `'` (it begins a
+  lifetime), and statement words (`new`, `delete`, …) are no longer filtered as
+  keywords — statement lines are rejected by `isStatementStart` instead. Tests:
+  `TestRustLifetimesDoNotBreakExtraction`, `TestRustNewConstructorIsNotFiltered`,
+  `TestJavaScriptStatementWordMethodsAreKept`.

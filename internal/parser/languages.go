@@ -240,7 +240,10 @@ var registry = map[string]langSpec{
 	},
 	"rust": {
 		name: "rust", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
-		stringDelims: []string{"\"", "'"},
+		// No single-quote delimiter: in Rust `'` begins a LIFETIME (`&'a str`),
+		// not a string. Treating it as a char literal blanked the code between
+		// two lifetimes and made every function using them invisible.
+		stringDelims: []string{"\""},
 		patterns:     []pattern{pat(pRustFn, 1), pat(pRustType, 2), pat(pRustImpl, 1)},
 		scopePattern: pRustImpl,
 	},

@@ -83,3 +83,25 @@ items.forEach(function () {
 		}
 	}
 }
+
+// Statement words such as `delete` are legal member names in JavaScript. The
+// keyword filter must not swallow them, while genuine statement lines stay
+// rejected by the span-start guard.
+func TestJavaScriptStatementWordMethodsAreKept(t *testing.T) {
+	source := `const store = {
+  delete(key) { return key; },
+  get(key) { return key; },
+};
+
+function run(key) {
+  delete store[key];
+  return store.get(key);
+}
+`
+	got := names(parser.ExtractSignatures("store.js", source))
+	for _, want := range []string{"delete", "get", "run"} {
+		if !got[want] {
+			t.Errorf("expected member %q to be extracted, got %v", want, got)
+		}
+	}
+}

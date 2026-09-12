@@ -167,16 +167,21 @@ func groupAt(match []string, n int) string {
 	return match[n]
 }
 
-// isIgnoredKeyword filters control-flow and statement keywords that permissive
-// patterns may accidentally capture as function names. `function` is included
-// because a bare-method pattern can otherwise read an anonymous
-// `function() {` expression as a symbol named "function".
+// isIgnoredKeyword filters control-flow keywords that permissive patterns may
+// accidentally capture as function names. `function` is included because a
+// bare-method pattern can otherwise read an anonymous `function() {` expression
+// as a symbol named "function".
+//
+// Only keywords that can never be a declaration name are listed. Statement
+// words such as `new` and `delete` are deliberately absent: `fn new()` (the
+// standard Rust constructor) and `delete() {}` (a legal JS method) are real
+// symbols. Statement lines are rejected by isStatementStart instead, which
+// inspects the start of the matched span rather than the captured name.
 func isIgnoredKeyword(s string) bool {
 	switch s {
 	case "if", "for", "while", "switch", "return", "else", "catch",
 		"do", "match", "when", "with", "case", "select", "defer", "go",
-		"function", "typeof", "new", "delete", "void", "await", "yield",
-		"throw", "try", "finally", "super", "this":
+		"function":
 		return true
 	}
 	return false

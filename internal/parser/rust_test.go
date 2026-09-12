@@ -106,3 +106,42 @@ func TestRustFreeFunctionStaysUnqualified(t *testing.T) {
 		t.Errorf("free function lost its unqualified name: %v", got)
 	}
 }
+
+// Rust lifetimes use the same character as a char literal. The sanitizer
+// treated `'` as a string delimiter and blanked the code between two lifetimes,
+// so `pub fn get<'a>(x: &'a str) -> &'a str` extracted NOTHING.
+func TestRustLifetimesDoNotBreakExtraction(t *testing.T) {
+	source := `pub fn get<'a>(x: &'a str) -> &'a str {
+    x
+}
+
+pub struct Holder<'a> {
+    inner: &'a str,
+}
+`
+	sigs := parser.ExtractSignatures("life.rs", source)
+	sig, ok := findBy(sigs, "get")
+	if !ok {
+		t.Fatalf("lifetime-bearing function not extracted; got %v", names(sigs))
+	}
+	if !strings.Contains(sig.Signature, "&'a str") {
+		t.Errorf("lifetime missing from signature: %q", sig.Signature)
+	}
+	if _, ok := findBy(sigs, "Holder"); !ok {
+		t.Errorf("lifetime-bearing struct not extracted; got %v", names(sigs))
+	}
+}
+
+// `new` is a legal Rust method name and the standard constructor idiom; it must
+// not be filtered as a statement keyword. A statement line beginning with `new`
+// must still be rejected.
+func TestRustNewConstructorIsNotFiltered(t *testing.T) {
+	source := `impl Widget {
+    pub fn new() -> Self { Widget }
+}
+`
+	got := names(parser.ExtractSignatures("w.rs", source))
+	if !got["Widget.new"] {
+		t.Errorf("expected Widget.new, got %v", got)
+	}
+}
