@@ -284,11 +284,12 @@ deterministic string check does perfectly, instantly, and for free.
   docs index.
 - [x] **M7.5 — Build artifacts.** Document the release process; keep the tree
   free of ~75 MB of committed-by-accident binaries.
-- [x] **M7.6 — License decision.** **DECIDED: open core.** The core CLI and
-  libraries are now Apache-2.0 (`LICENSE`), with attribution and the
-  commercial-surface boundary in `NOTICE`; `docs/licensing.md` records the
-  decision, the defects in the previous BUSL-1.1 parameters, and the options
-  considered.
+- [x] **M7.6 — License decision.** **DECIDED: BUSL-1.1 with a real change
+  date.** `Change Date: 2030-06-01` (within four years of the first public
+  distribution, 2026-06-02) and a change licence of MIT. Production and internal
+  use are permitted; offering it as a standalone hosted service is not.
+  `docs/licensing.md` records the decision, why a permissive licence was
+  rejected, and the boundary rules.
 
 ---
 
@@ -305,7 +306,10 @@ deterministic string check does perfectly, instantly, and for free.
 ## Open decisions
 
 None. The licence question (M7.6) was the only item requiring a maintainer
-decision; it was resolved in favour of Apache-2.0 with an open-core model.
+decision. It was first resolved in favour of Apache-2.0, then reversed once the
+implication was clear: a permissive licence lets anyone monetise the work
+without paying the author. The project uses BUSL-1.1, which permits internal and
+production use but reserves the hosted-service business.
 
 ## Progress log
 
@@ -525,9 +529,10 @@ decision; it was resolved in favour of Apache-2.0 with an open-core model.
   Go generics/type expressions, visibility filtering, and the `report_unparsed`
   diagnostic. `docs/index.md` links this roadmap. Verifying the claim uncovered
   and fixed M1.A.14 (PHP return types).
-- **M7.6** — Licence resolved: Apache-2.0 core with an open-core boundary
-  (`LICENSE`, `NOTICE`, README, `docs/licensing.md`). Recorded rather than
-  changed unilaterally; the maintainer chose open core.
+- **M7.6** — Licence resolved twice. First Apache-2.0 (open core); reverted to
+  BUSL-1.1 with `Change Date: 2030-06-01` once the maintainer confirmed the goal
+  is to prevent unremunerated monetisation. `LICENSE`, README, and
+  `docs/licensing.md` all reflect the final choice.
 - **M7.5** — Removed the ~78 MB of stale platform binaries and `checksums.txt`
   from the working tree (all were gitignored, none tracked), left `dist/` as the
   documented build output, built a current `dist/driftlock` and verified

@@ -1,52 +1,74 @@
 # Licensing
 
-**Decided: the project is Apache-2.0 with an open-core model.**
+**Decided: Business Source License 1.1, with `Change Date: 2030-06-01` and a
+change licence of MIT.**
 
-The CLI and libraries in this repository are licensed under the Apache License,
-Version 2.0 (see [LICENSE](../LICENSE)). You may use, modify, self-host, and
-redistribute them freely, including commercially and inside an organisation, and
-you may build products on top of them.
+## What the licence allows
 
-Optional commercial offerings operated by the copyright holder — for example a
-hosted service or a team management surface — are separate products under
-separate terms. They are not required to use, build, or self-host anything here.
-[NOTICE](../NOTICE) records the attribution and that boundary.
+You may use, modify, and redistribute Driftlock for any purpose, **including in
+production**. An individual developer acting on their own behalf, or an
+organisation using it for its own internal purposes, may always do so without
+paying anything.
 
-## Why
+## What the licence reserves
 
-Driftlock is a CLI that a team installs on every developer machine and in CI,
-and that runs inside a git hook. Tools in that position appear in a
-legal/security review before they appear in a build, so permissive licensing is
-doing real product work: it removes the review friction that would otherwise
-stop the tool being adopted at all.
+The one restricted use is offering Driftlock — or a derivative work that
+directly competes with it — as a standalone hosted service (SaaS). That is the
+commercial surface the licence protects: nobody can take this work and sell it
+as a service without the author earning from it.
 
-## What changed, and why
+## It becomes open source
 
-The project previously shipped the Business Source License 1.1 with
-`Change Date: 2099-12-31`, which had three concrete defects:
+On **2030-06-01** this version automatically converts to **MIT**, with no
+further conditions. That date is a real, near-term date, not a placeholder.
 
-1. **The change date was off-spec.** BUSL 1.1 caps the change date at four years
-   from a version's first public distribution — the licence text itself said the
-   fourth anniversary applies "whichever comes first" — so the stated date did
-   not do what it appeared to do, while reading to a reviewer as "never becomes
-   open source".
-2. **The README and the grant disagreed.** The README described use as free for
-   "any non-commercial purpose", which did not match the broader Additional Use
-   Grant.
-3. **It was a promise no reviewer would rely on**, which is the opposite of what
-   a licence is for.
+## Why not a permissive licence
 
-## Options considered
+An earlier revision of this repository moved the project to Apache-2.0 under an
+"open core" model. It was reverted, for a concrete reason: Apache-2.0 grants
+everyone the right to use, modify, distribute, sublicense, and **sell** the
+software commercially, with no obligation to pay the author or share revenue.
+Anyone could have sold Driftlock or run a paid hosted version of it and the
+author would have earned nothing. Permissive licensing buys adoption by giving
+up exactly the exclusivity that was wanted here.
 
-| Option | Outcome |
-| --- | --- |
-| **Apache-2.0 (chosen, as open core)** | Maximum adoption for the core CLI; explicit patent grant; monetisation moves to optional hosted/team offerings. |
-| MIT | Equivalent adoption, no explicit patent grant. |
-| BUSL-1.1 with a correct 4-year change date | Source-available; still blocked by some corporate policies. |
-| Keep BUSL-1.1 as it was | Rejected: off-spec date plus ambiguous README. |
+BUSL-1.1 keeps the same practical adoption story for real users — every internal
+and production use is permitted — while reserving the hosted-service business
+for the author.
 
-## Notes for contributors
+## Why 2030-06-01
 
-Contributions are accepted under the Apache License, Version 2.0 (section 5 of
-the licence: a contribution intentionally submitted for inclusion is under the
-same terms unless explicitly stated otherwise). No separate CLA is in place.
+BUSL 1.1 requires the change date to be no more than four years from the first
+public distribution of the Licensed Work, and the licence text itself says the
+change takes effect on the change date *or* the fourth anniversary of a
+version's first public distribution, **whichever comes first**.
+
+- The first public distribution was `v0.1.0` on 2026-06-02.
+- Four years later is 2030-06-02.
+- The change date is therefore set to **2030-06-01**, one day inside that
+  boundary, so it is unambiguously within the permitted window.
+
+The previous value was `2099-12-31`, which was off-spec and read to a reviewer
+as "never becomes open source".
+
+## What the licence does not do
+
+- It does not grant trademark rights; you may not present a fork as the official
+  Driftlock.
+- It does not require anyone to publish modifications.
+- It does not restrict internal or production use, which is what most users
+  actually do.
+
+## Relicensing
+
+The project currently has a single copyright holder (every commit is by
+`kookafor893@gmail.com`), so the licence can still be changed cleanly. Once an
+outside contribution lands, that changes: relicensing would require either a
+contributor licence agreement or explicit permission from each contributor. If
+relicensing flexibility matters, put a CLA or DCO in place **before** accepting
+outside patches.
+
+## Not legal advice
+
+This page records an engineering decision and its reasoning. It is not legal
+advice; have a lawyer review the licence before relying on it commercially.
