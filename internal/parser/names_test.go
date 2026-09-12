@@ -20,9 +20,9 @@ func TestNameNotConfusedByKeywordLikeSymbol(t *testing.T) {
 		want string
 	}{
 		{"python def named type", "a.py", "def type(x):\n    pass\n", "type"},
-		{"rust fn named type", "a.rs", "fn type(x: i32) -> i32 { x }\n", "type"},
+		{"rust fn named type", "a.rs", "pub fn type(x: i32) -> i32 { x }\n", "type"},
 		{"kotlin fun named type", "a.kt", "fun type(x: Int) {}\n", "type"},
-		{"go method named object", "a.go", "package p\n\nfunc (t *T) object(x int) {}\n", "object"},
+		{"go method name", "a.go", "package p\n\nfunc (t *T) Object(x int) {}\n", "Object"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

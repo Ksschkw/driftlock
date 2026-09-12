@@ -45,6 +45,17 @@ type langSpec struct {
 	// are qualified as `Scope.Name` so same-named methods on different types
 	// stay distinguishable.
 	scopePattern *regexp.Regexp
+	// visibility names the language's public/private rule, so unexported
+	// declarations never reach the structural diff. "" means "treat every
+	// declaration as public".
+	//
+	//	go        - exported identifiers start with an uppercase letter
+	//	underscore - a leading underscore marks a name private (Python)
+	//	rustpub   - the declaration must carry `pub`
+	//
+	// Without this, renaming a private helper produced a structural change and
+	// could block a commit over documentation for internal code.
+	visibility string
 	// dataLike marks structured-data languages (YAML/JSON/TOML/XML/Markdown)
 	// whose "structure" lives in keys/tags/headings rather than code
 	// signatures. String/comment stripping is skipped for these because the
@@ -206,12 +217,14 @@ var registry = map[string]langSpec{
 		name: "go", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
 		stringDelims: []string{"`", "\""},
 		patterns:     []pattern{pat(pGoFunc, 1), pat(pGoType, 1)},
+		visibility:   "go",
 	},
 	"python": {
 		name: "python", lineComments: []string{"#"},
 		stringDelims:    []string{`"""`, "'''", "\"", "'"},
 		patterns:        []pattern{pat(pPyDef, 1), pat(pPyClass, 1)},
 		indentDelimited: true,
+		visibility:      "underscore",
 	},
 	"javascript": {
 		name: "javascript", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},
@@ -250,6 +263,7 @@ var registry = map[string]langSpec{
 		// used only as the scope pattern.
 		patterns:     []pattern{pat(pRustFn, 1), pat(pRustType, 2)},
 		scopePattern: pRustImpl,
+		visibility:   "rustpub",
 	},
 	"swift": {
 		name: "swift", lineComments: []string{"//"}, blockComment: [][2]string{{"/*", "*/"}},

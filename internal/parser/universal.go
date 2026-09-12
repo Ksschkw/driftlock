@@ -3,6 +3,8 @@ package parser
 import (
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // extractSignatures is the core extraction routine. It selects a language spec
@@ -67,6 +69,9 @@ func extractSignatures(filePath, source string) []Signature {
 				}
 			}
 			sig := tidySignature(origSlice)
+			if !isPublicSymbol(spec.visibility, name, sig) {
+				continue
+			}
 			if scope, ok := scopes[startLine]; ok && scope != "" {
 				name = scope + "." + name
 			}
@@ -111,6 +116,22 @@ func isStatementStart(span string) bool {
 		return true
 	}
 	return false
+}
+
+// isPublicSymbol applies a language's visibility rule so private declarations
+// never reach the structural diff. An empty rule treats everything as public.
+func isPublicSymbol(rule, name, sig string) bool {
+	switch rule {
+	case "go":
+		r, _ := utf8.DecodeRuneInString(name)
+		return unicode.IsUpper(r)
+	case "underscore":
+		return !strings.HasPrefix(name, "_")
+	case "rustpub":
+		return strings.Contains(sig, "pub ")
+	default:
+		return true
+	}
 }
 
 // computeScopes maps each 1-based line number inside a scope-opening block to

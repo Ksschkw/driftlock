@@ -138,7 +138,7 @@ func TestRustSignatures(t *testing.T) {
 	Ok(())
 }
 
-struct Config {
+pub struct Config {
 	name: String,
 }
 `

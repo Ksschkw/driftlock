@@ -105,7 +105,7 @@ exists to prevent. **This milestone is the highest priority.**
   constructor was invisible. *Accept:* lifetime-bearing functions extract with
   full signatures; `fn new()` is a symbol; statement guards still apply.
 
-- [ ] **M1.A.12 — Public-API filtering.** The parser extracts every
+- [x] **M1.A.12 — Public-API filtering.** The parser extracts every
   declaration, including private ones: Python `_private`/`__init__` and Go
   unexported names survive into the structural diff, so an internal refactor can
   trigger a documentation block. The README claims only public signatures are
@@ -389,3 +389,8 @@ deterministic string check does perfectly, instantly, and for free.
   `-update`, plus 10 corpus files (Go, Python, TS, Java, Rust, Kotlin, Swift,
   C#, SQL, YAML) and their goldens. A corpus file without a golden fails
   loudly. Reviewing the generated goldens exposed M1.A.12 and M1.A.13.
+- **M1.A.12** — Per-language visibility rules: Go (uppercase = exported),
+  Python (leading `_` = private), Rust (`pub` required). Private declarations no
+  longer reach the structural diff. Python golden updated by the harness,
+  proving it catches the change. Tests: `internal/parser/visibility_test.go`;
+  docs/architecture.md documents the rules.

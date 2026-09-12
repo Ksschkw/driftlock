@@ -1,5 +1,3 @@
 Client	class Client
-__init__	def __init__(self, base_url: str) -> None
-_private	def _private(x: int) -> int
 fetch	async def fetch(url: str, timeout: int = 30) -> bytes
 render	def render(name: str, options: dict = {}, tags: set = {1, 2}) -> str

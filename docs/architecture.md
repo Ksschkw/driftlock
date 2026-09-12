@@ -114,6 +114,19 @@ Driftlock parses **any language** through per-language regex extractors, with th
 
 Supported languages include Go, Python, JavaScript/TypeScript, Java, C#, C/C++, Rust, Swift, Kotlin, Scala, PHP, Ruby, Shell/Bash, Lua, Clojure, and SQL (`CREATE TABLE`/`VIEW`/…), plus data and markup formats: YAML, JSON, TOML/INI, XML/HTML, and Markdown.
 
+### Visibility filtering
+
+Each language spec carries a visibility rule, so private declarations never reach the structural diff:
+
+| Language | Rule |
+| --- | --- |
+| Go | exported identifiers start with an uppercase letter |
+| Python | a leading underscore marks a name private (so `_helper` and `__init__` are excluded) |
+| Rust | the declaration must carry `pub` |
+| everything else | every declaration is treated as public |
+
+This matters because the diff drives the check: without it, renaming a private helper produced a structural change and Driftlock could block a commit over documentation for internal code.
+
 The `driftlock:ignore` marker (inline or standalone) removes a declaration from the extracted set — see [Ignoring symbols](./ignoring.md).
 
 ---
