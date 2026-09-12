@@ -7,6 +7,39 @@ import (
 	"strings"
 )
 
+// parseDotEnvValue extracts the value from the right-hand side of a .env line.
+//
+// It handles the two forms a real .env uses:
+//
+//	KEY="value with # hash"   quoted: the closing quote ends the value
+//	KEY=value # a comment      unquoted: whitespace before '#' starts a comment
+//
+// A '#' immediately preceded by a non-space character is part of the value
+// (`abc#def` is kept), and a line whose value is only a comment becomes empty.
+// Without comment handling, copying a documented example such as
+// `DRIFTLOCK_DEBUG=1 # enable debug` silently set the variable to the whole
+// sentence — and for DRIFTLOCK_SKIP=true it would fail to match "true".
+func parseDotEnvValue(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if raw[0] == '"' || raw[0] == '\'' {
+		quote := raw[0]
+		if end := strings.IndexByte(raw[1:], quote); end >= 0 {
+			return raw[1 : 1+end]
+		}
+		return raw[1:] // unterminated quote: take the remainder
+	}
+	if i := strings.Index(raw, " #"); i >= 0 {
+		raw = raw[:i]
+	}
+	if strings.HasPrefix(raw, "#") {
+		return ""
+	}
+	return strings.TrimSpace(raw)
+}
+
 // LoadDotEnv reads a .env file from dir and populates the process environment
 // with any variables it defines that are not already set. Real environment
 // variables always win, so a value exported in the shell overrides the file.
@@ -16,8 +49,9 @@ import (
 // while every developer keeps their secret out of version control.
 //
 // The parser is intentionally small: it supports KEY=VALUE lines, blank lines,
-// "#" comments, an optional leading "export ", and single/double quoted values.
-// A missing .env file is not an error.
+// full-line "#" comments, trailing "#" comments after a value, an optional
+// leading "export ", and single/double quoted values. A missing .env file is
+// not an error.
 func LoadDotEnv(dir string) {
 	path := filepath.Join(dir, ".env")
 	f, err := os.Open(path)
@@ -41,14 +75,7 @@ func LoadDotEnv(dir string) {
 		if key == "" {
 			continue
 		}
-		val = strings.TrimSpace(val)
-		// Strip a matching pair of surrounding quotes.
-		if len(val) >= 2 {
-			if (val[0] == '"' && val[len(val)-1] == '"') ||
-				(val[0] == '\'' && val[len(val)-1] == '\'') {
-				val = val[1 : len(val)-1]
-			}
-		}
+		val = parseDotEnvValue(val)
 		// Never clobber a variable the developer set in their real shell.
 		if _, present := os.LookupEnv(key); !present {
 			_ = os.Setenv(key, val)

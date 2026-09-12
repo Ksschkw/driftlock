@@ -89,3 +89,51 @@ api_key = "${DRIFTLOCK_API_KEY}"
 		t.Errorf("api_key = %q, want it expanded from .env", cfg.LLM.APIKey)
 	}
 }
+
+// A trailing comment must not become part of the value. The shipped example
+// used `KEY=1 # explanation`, which previously set the variable to the whole
+// sentence.
+func TestParseDotEnvValue(t *testing.T) {
+	cases := map[string]string{
+		"":                            "",
+		"bare":                        "bare",
+		"  spaced  ":                  "spaced",
+		"1 # enable debug":            "1",
+		"true # set to true to skip":  "true",
+		"# only a comment":            "",
+		`"quoted value"`:              "quoted value",
+		`"value # not a comment"`:     "value # not a comment",
+		`'single # kept'`:             "single # kept",
+		`"quoted" # trailing comment`: "quoted",
+		"abc#def":                     "abc#def",
+		`value#nospace`:               "value#nospace",
+	}
+	for in, want := range cases {
+		if got := parseDotEnvValue(in); got != want {
+			t.Errorf("parseDotEnvValue(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// The end-to-end effect: a documented .env with inline comments behaves as the
+// comments say it does.
+func TestLoadDotEnvStripsInlineComments(t *testing.T) {
+	dir := t.TempDir()
+	content := "DRIFTLOCK_SKIP=true # bypass the hook\nDRIFTLOCK_DEBUG=1 # verbose\n"
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"DRIFTLOCK_SKIP", "DRIFTLOCK_DEBUG"} {
+		os.Unsetenv(k)
+		t.Cleanup(func() { os.Unsetenv(k) })
+	}
+
+	LoadDotEnv(dir)
+
+	if got := os.Getenv("DRIFTLOCK_SKIP"); got != "true" {
+		t.Errorf("DRIFTLOCK_SKIP = %q, want true", got)
+	}
+	if got := os.Getenv("DRIFTLOCK_DEBUG"); got != "1" {
+		t.Errorf("DRIFTLOCK_DEBUG = %q, want 1", got)
+	}
+}
