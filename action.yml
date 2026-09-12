@@ -6,13 +6,17 @@ branding:
 
 inputs:
   base:
-    description: 'Base git ref to compare against (the PR target).'
+    description: >-
+      Base git ref to compare against (the PR target). When empty, the action
+      resolves the pull request base, then the push's previous commit.
     required: false
-    default: ${{ github.event.pull_request.base.sha }}
+    default: ''
   head:
-    description: 'Head git ref (the PR tip).'
+    description: >-
+      Head git ref (the PR tip). When empty, the action resolves the checked-out
+      commit.
     required: false
-    default: ${{ github.sha }}
+    default: ''
   version:
     description: 'Driftlock version to install (a git tag, or "latest").'
     required: false
@@ -43,14 +47,58 @@ runs:
       shell: bash
       run: go install github.com/Ksschkw/driftlock/cmd/driftlock@${{ inputs.version }}
 
+    # GitHub does NOT evaluate ${{ }} expressions in action metadata `default`
+    # fields; they are literal strings. The refs are therefore resolved here,
+    # where the workflow context is actually available.
+    - name: Resolve base and head refs
+      id: refs
+      shell: bash
+      env:
+        INPUT_BASE: ${{ inputs.base }}
+        INPUT_HEAD: ${{ inputs.head }}
+        EVENT_PR_BASE: ${{ github.event.pull_request.base.sha }}
+        EVENT_BEFORE: ${{ github.event.before }}
+        EVENT_SHA: ${{ github.sha }}
+      run: |
+        set -euo pipefail
+
+        is_zero_sha() {
+          case "$1" in
+            ""|0000000000000000000000000000000000000000) return 0 ;;
+          esac
+          return 1
+        }
+
+        base="$INPUT_BASE"
+        if [ -z "$base" ]; then base="$EVENT_PR_BASE"; fi
+        if [ -z "$base" ] && ! is_zero_sha "$EVENT_BEFORE"; then base="$EVENT_BEFORE"; fi
+
+        head="$INPUT_HEAD"
+        if [ -z "$head" ]; then head="$EVENT_SHA"; fi
+        if [ -z "$head" ]; then head="HEAD"; fi
+
+        if [ -z "$base" ]; then
+          echo "::error::Driftlock could not determine a base ref. Pass 'base' explicitly, e.g. base: \${{ github.event.pull_request.base.sha }}"
+          exit 1
+        fi
+
+        echo "base=$base" >> "$GITHUB_OUTPUT"
+        echo "head=$head" >> "$GITHUB_OUTPUT"
+        echo "driftlock: comparing $base..$head"
+
     - name: Check documentation drift
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
         DRIFTLOCK_API_KEY: ${{ inputs.api-key }}
+        BASE_REF: ${{ steps.refs.outputs.base }}
+        HEAD_REF: ${{ steps.refs.outputs.head }}
+        REPORT_ONLY: ${{ inputs.report-only }}
       run: |
-        flags=()
-        if [ "${{ inputs.report-only }}" = "true" ]; then
-          flags+=(--report)
+        set -euo pipefail
+
+        args=(check --base "$BASE_REF" --head "$HEAD_REF")
+        if [ "$REPORT_ONLY" = "true" ]; then
+          args+=(--report)
         fi
-        driftlock check --base "${{ inputs.base }}" --head "${{ inputs.head }}" "${flags[@]}"
+        driftlock "${args[@]}"

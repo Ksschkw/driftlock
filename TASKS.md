@@ -223,7 +223,7 @@ exists to prevent. **This milestone is the highest priority.**
 
 ## M4 — CI and distribution
 
-- [ ] **M4.1 — Fix `action.yml` ref defaults.** `default: ${{ github.sha }}`
+- [x] **M4.1 — Fix `action.yml` ref defaults.** `default: ${{ github.sha }}`
   in action metadata is a **literal string**; GitHub does not evaluate
   expressions there, so the shipped workflow diffs against a bogus revision.
   Compute base/head inside a `run:` step (or require them explicitly).
@@ -427,3 +427,6 @@ deterministic string check does perfectly, instantly, and for free.
   `driftlock hook-run`, propagates a blocking exit code, and skips cleanly when
   the binary is absent. Tests: `TestChainedHookRunsDriftlock`,
   `TestChainedHookPropagatesFailure`, `TestChainedHookSkipsWhenBinaryMissing`.
+- **M4.1** — `base`/`head` action inputs default to empty; refs are resolved in
+  a `run:` step (PR base, then push `before`, then `github.sha`) and passed
+  through step outputs. Tests: `cmd/driftlock/action_test.go`.
