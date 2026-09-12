@@ -217,16 +217,25 @@ An optional, tamper-evident audit trail. Driftlock always appends a SHA-256 of `
 | --- | --- | --- | --- |
 | `solana` | bool | `false` | Enable writing the audit hash to Solana. |
 | `rpc_endpoint` | string | `""` | Solana RPC endpoint (e.g. `https://api.devnet.solana.com`). |
-| `keypair_path` | string | `""` | Path to the Solana keypair that signs the audit transactions (e.g. `~/.config/solana/id.json`). |
-| `program_id` | string | `""` | Program to write to. **Empty uses the default Solana Memo program.** |
+| `keypair_path` | string | `""` | Path to the Solana keypair that signs the audit transactions (e.g. `~/.config/solana/id.json`). A leading `~` is expanded to your home directory. |
+| `program_id` | string | `""` | **Must be empty.** Only the built-in Solana Memo program is supported; a generic "write this hash" call cannot be built for an arbitrary program, so setting this fails with an explanation. |
 
 ```toml
 [audit]
 solana = true
 rpc_endpoint = "https://api.devnet.solana.com"
 keypair_path = "~/.config/solana/id.json"
-program_id = ""     # default Memo program
+program_id = ""     # must be empty; the Memo program is the only supported one
 ```
+
+Notes:
+
+- Auditing is **best-effort**: a failure is reported as a warning and never
+  blocks a commit, because a blockchain outage says nothing about whether the
+  documentation is correct.
+- The submission is bounded by a 30-second timeout so an unreachable RPC
+  endpoint cannot stall a commit.
+- `keypair_path` may begin with `~`.
 
 View the last 20 local audit entries any time with:
 

@@ -389,6 +389,11 @@ documentation content, then submits it to the Solana blockchain using the
 standard [Memo Program](https://spl.solana.com/memo). This hash is permanently
 recorded and publicly verifiable.
 
+Auditing is optional and best-effort: a failure is a warning, never a blocked
+commit, and the submission is bounded by a 30-second timeout. Only the Memo
+program is supported — `program_id` must be left empty — and `keypair_path` may
+begin with `~`.
+
 ---
 
 ## Development

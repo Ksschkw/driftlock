@@ -46,4 +46,5 @@ check_mode = "auto"
 solana = false
 # rpc_endpoint = "https://api.devnet.solana.com"
 # keypair_path = "~/.config/solana/id.json"
-# program_id = ""   # Leave empty to use the default Memo program
+# program_id must stay empty: only the built-in Memo program is supported.
+# program_id = ""

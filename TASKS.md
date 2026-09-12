@@ -271,7 +271,7 @@ deterministic string check does perfectly, instantly, and for free.
   but the parser keeps the comment as part of the value, so copying it turns
   debug on permanently.
 - [ ] **M7.2 — Fix `.env.example`** to match the parser's real capabilities.
-- [ ] **M7.3 — Solana honesty.** `~` is never expanded in `keypair_path`, and
+- [x] **M7.3 — Solana honesty.** `~` is never expanded in `keypair_path`, and
   `program_id` is documented but always errors. Implement or clearly mark
   unsupported.
 - [ ] **M7.4 — Docs sync.** Align README/docs with actual parser coverage
@@ -501,3 +501,8 @@ deterministic string check does perfectly, instantly, and for free.
   non-empty check had made `0` enable debug. `.env.example` rewritten to match,
   and it now documents `DRIFTLOCK_STRICT_LLM`. Tests: `TestDebugEnabled`,
   `TestExampleDotEnvValues`.
+- **M7.3** — Solana: `~` is expanded in `keypair_path` (with a clear error
+  naming the resolved path), an empty `keypair_path`/`rpc_endpoint` is reported
+  explicitly, the submission is bounded by a 30s timeout, and `program_id` is
+  refused with an explanation that only Memo is supported. Tests:
+  `internal/audit/solana_test.go`; docs updated.
