@@ -611,57 +611,132 @@ func contains(slice []string, item string) bool {
 	return false
 }
 
-// extractNameFromSignature extracts the function/method name from a signature
-// string, keeping only names that look like public API to avoid polluting doc
-// chunking with local symbols.
+// extractNameFromSignature extracts the symbol name used to find the sections
+// of a document that discuss a change.
+//
+// The previous implementation only recognised a signature whose FIRST token was
+// a declaration keyword, so `func`, `def`, and bare `fn` worked but everything
+// with a leading modifier did not:
+//
+//	public int add(int a)        -> "" (Java/C#)
+//	pub fn build(&self)          -> "" (Rust)
+//	export function makeUser()   -> "" (TypeScript)
+//	func (a *A) Close()          -> "" (Go receiver read as the name)
+//
+// An empty name meant `changedNames` was empty, doc chunking degraded to
+// sending the WHOLE document, and the "not documented anywhere" note was wrong.
+//
+// The name is now the identifier immediately before the parameter list (with a
+// Go receiver skipped and trailing generics stripped), or the identifier after
+// a type keyword for type declarations.
 func extractNameFromSignature(sig string) string {
-	if !strings.Contains(sig, "(") {
-		// Type/class declarations have no parens; take the last token.
-		fields := strings.Fields(sig)
-		if len(fields) >= 2 {
-			name := fields[len(fields)-1]
-			if isExportedName(name) {
-				return name
-			}
-		}
+	sig = strings.TrimSpace(sig)
+	if sig == "" {
 		return ""
 	}
-	parts := strings.Fields(sig)
-	if len(parts) == 0 {
+
+	// Type-like declarations carry the name right after the keyword.
+	for i, f := range strings.Fields(sig) {
+		switch f {
+		case "class", "struct", "interface", "trait", "enum", "object",
+			"record", "module", "union", "type":
+			fields := strings.Fields(sig)
+			if i+1 < len(fields) {
+				if name := publicIdent(cleanIdent(fields[i+1])); name != "" {
+					return name
+				}
+			}
+		}
+	}
+
+	searchFrom := 0
+	// A Go method puts its receiver in parentheses before the name:
+	// `func (a *A) Close(...)`. Skip that group so the receiver is not read as
+	// the name.
+	if strings.HasPrefix(sig, "func (") {
+		if close := strings.IndexByte(sig, ')'); close >= 0 {
+			searchFrom = close + 1
+		}
+	}
+	rel := strings.IndexByte(sig[searchFrom:], '(')
+	if rel < 0 {
 		return ""
 	}
-	first := parts[0]
-	if first == "func" || first == "def" || first == "fn" || first == "function" ||
-		first == "fun" || first == "defn" || first == "class" || first == "struct" ||
-		first == "interface" || first == "trait" || first == "enum" {
-		if len(parts) >= 2 {
-			name := parts[1]
-			if idx := strings.IndexByte(name, '('); idx != -1 {
-				name = name[:idx]
-			}
-			if isExportedName(name) || isLowercasePublic(sig) {
-				return name
-			}
-			return ""
-		}
+	return publicIdent(lastIdent(sig[searchFrom : searchFrom+rel]))
+}
+
+// publicIdent rejects names that are empty, keywords, or private-by-convention
+// (a leading underscore). Uppercase-initial names (Go, C#), camelCase names
+// (Java, TypeScript) and lowercase names (Python, Rust) are all accepted:
+// filtering chunking by case silently disabled it for most languages.
+func publicIdent(name string) string {
+	if name == "" || strings.HasPrefix(name, "_") || isControlKeyword(name) {
+		return ""
 	}
-	return ""
+	return name
 }
 
-func isExportedName(name string) bool {
-	return len(name) > 0 && name[0] >= 'A' && name[0] <= 'Z'
-}
-
-func isLowercasePublic(sig string) bool {
-	if strings.Contains(sig, "def ") || strings.Contains(sig, "fn ") {
-		parts := strings.Fields(sig)
-		if len(parts) >= 2 {
-			name := parts[1]
-			if strings.Contains(name, "(") {
-				name = name[:strings.IndexByte(name, '(')]
-			}
-			return len(name) > 0 && name[0] != '_'
-		}
+// isControlKeyword reports whether a token is a control-flow word that a
+// permissive pattern may have captured instead of a real symbol name.
+func isControlKeyword(s string) bool {
+	switch s {
+	case "if", "for", "while", "switch", "return", "else", "catch",
+		"do", "match", "when", "with", "case", "select", "defer", "go",
+		"function":
+		return true
 	}
 	return false
+}
+
+// cleanIdent trims a trailing generic, bracket, paren, or annotation clause
+// from an identifier: `Stack[T` -> `Stack`, `ID:` -> `ID`.
+func cleanIdent(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexAny(s, "[<(:"); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
+}
+
+// lastIdent returns the final identifier-like token in s, ignoring a trailing
+// generic or array clause (`func Map[T any]` -> `Map`, `List<String> get` ->
+// `get`).
+func lastIdent(s string) string {
+	s = strings.TrimRight(s, " \t")
+	for len(s) > 0 {
+		last := s[len(s)-1]
+		if last != '>' && last != ']' {
+			break
+		}
+		open := byte('<')
+		if last == ']' {
+			open = '['
+		}
+		depth := 0
+		i := len(s) - 1
+		for ; i >= 0; i-- {
+			switch s[i] {
+			case last:
+				depth++
+			case open:
+				depth--
+			}
+			if depth == 0 {
+				break
+			}
+		}
+		if i <= 0 {
+			return ""
+		}
+		s = strings.TrimRight(s[:i], " \t")
+	}
+	i := len(s)
+	for i > 0 && isIdentByte(s[i-1]) {
+		i--
+	}
+	return s[i:]
+}
+
+func isIdentByte(c byte) bool {
+	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }

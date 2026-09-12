@@ -244,7 +244,11 @@ var registry = map[string]langSpec{
 		// not a string. Treating it as a char literal blanked the code between
 		// two lifetimes and made every function using them invisible.
 		stringDelims: []string{"\""},
-		patterns:     []pattern{pat(pRustFn, 1), pat(pRustType, 2), pat(pRustImpl, 1)},
+		// pRustImpl is intentionally NOT a pattern: an impl block is not itself
+		// an API symbol (its methods are), and emitting it produced a second
+		// symbol named after the type that collided with `struct Foo`. It is
+		// used only as the scope pattern.
+		patterns:     []pattern{pat(pRustFn, 1), pat(pRustType, 2)},
 		scopePattern: pRustImpl,
 	},
 	"swift": {

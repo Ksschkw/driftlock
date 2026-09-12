@@ -178,3 +178,29 @@ func TestChangeOrderIsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+// The formatted diff labels each change with the parser's (possibly qualified)
+// symbol name. Without it, two Rust impl blocks declaring an identical
+// signature are indistinguishable to the reader and to the LLM.
+func TestFormatShowsQualifiedName(t *testing.T) {
+	oldSrc := `impl A {
+    pub fn build() -> Self { A }
+}
+
+impl B {
+    pub fn build() -> Self { B }
+}
+`
+	newSrc := `impl A {
+    pub fn build() -> Self { A }
+}
+`
+	changes := ExtractStructuralChanges("m.rs", oldSrc, newSrc)
+	if len(changes) != 1 || changes[0].Name != "B.build" {
+		t.Fatalf("expected one B.build change, got %+v", changes)
+	}
+	out := FormatStructuralChanges(changes)
+	if !strings.Contains(out, "B.build") {
+		t.Errorf("formatted diff does not name the removed symbol: %q", out)
+	}
+}

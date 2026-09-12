@@ -122,7 +122,7 @@ exists to prevent. **This milestone is the highest priority.**
   *Accept:* overload removal → one `removed`; same-name method removal → one
   `removed`; single signature edit → one `modified`.
 
-- [ ] **M1.B.3 — Qualified display names.**
+- [x] **M1.B.3 — Qualified display names.**
   Where cheap (Go receiver, Rust `impl`), show `Type.Method` in the formatted
   diff so the LLM sees a precise symbol. Bare names remain the key for doc
   chunking.
@@ -368,3 +368,9 @@ deterministic string check does perfectly, instantly, and for free.
   keywords — statement lines are rejected by `isStatementStart` instead. Tests:
   `TestRustLifetimesDoNotBreakExtraction`, `TestRustNewConstructorIsNotFiltered`,
   `TestJavaScriptStatementWordMethodsAreKept`.
+- **M1.B.3** — `StructuralChange.Name` (qualified where known) is shown in the
+  formatted diff, and chunking name extraction was rewritten: it now handles
+  leading modifiers (Java/C#/Rust/TS), Go receivers, and generics, so doc
+  chunking no longer degrades to the whole document. Rust `impl` blocks are no
+  longer emitted as symbols. Tests: `internal/hook/name_test.go`,
+  `TestFormatShowsQualifiedName`.

@@ -10,9 +10,14 @@ import (
 // StructuralChange describes a single structural change (function signature change).
 type StructuralChange struct {
 	FilePath string
-	OldSig   string
-	NewSig   string
-	Change   string // "added", "removed", "modified"
+	// Name is the symbol name as the parser identified it. It may be qualified
+	// by an enclosing scope (Rust `A.build`), which is what makes two
+	// same-named methods on different types distinguishable to a reader even
+	// when their signature text is identical.
+	Name   string
+	OldSig string
+	NewSig string
+	Change string // "added", "removed", "modified"
 }
 
 // ExtractStructuralChanges compares old and new file content and returns a list
@@ -66,6 +71,7 @@ func ExtractStructuralChanges(filePath string, oldContent, newContent string) []
 		if len(oldLeft) == 1 && len(newLeft) == 1 {
 			changes = append(changes, StructuralChange{
 				FilePath: filePath,
+				Name:     name,
 				OldSig:   oldLeft[0],
 				NewSig:   newLeft[0],
 				Change:   "modified",
@@ -75,6 +81,7 @@ func ExtractStructuralChanges(filePath string, oldContent, newContent string) []
 		for _, oldSig := range oldLeft {
 			changes = append(changes, StructuralChange{
 				FilePath: filePath,
+				Name:     name,
 				OldSig:   oldSig,
 				Change:   "removed",
 			})
@@ -82,6 +89,7 @@ func ExtractStructuralChanges(filePath string, oldContent, newContent string) []
 		for _, newSig := range newLeft {
 			changes = append(changes, StructuralChange{
 				FilePath: filePath,
+				Name:     name,
 				NewSig:   newSig,
 				Change:   "added",
 			})
@@ -121,18 +129,29 @@ func unpair(olds, news []string) (oldLeft, newLeft []string) {
 }
 
 // FormatStructuralChanges returns a human-readable string summarizing structural changes.
+//
+// Each entry is labelled with the symbol name (qualified where the parser could
+// determine a scope, e.g. Rust `A.build`). The name matters because the
+// signature text alone is not always unique: two Rust impl blocks can declare
+// `pub fn build() -> Self`, and without the scope label the LLM sees two
+// identical strings and cannot tell which type changed.
 func FormatStructuralChanges(changes []StructuralChange) string {
 	var sb strings.Builder
 	for _, c := range changes {
 		sb.WriteString(c.FilePath + ":\n")
+		label := c.Name
+		if label == "" {
+			label = "(unknown)"
+		}
 		switch c.Change {
 		case "added":
-			sb.WriteString("  + added: " + c.NewSig + "\n")
+			sb.WriteString("  + added " + label + ": " + c.NewSig + "\n")
 		case "removed":
-			sb.WriteString("  - removed: " + c.OldSig + "\n")
+			sb.WriteString("  - removed " + label + ": " + c.OldSig + "\n")
 		case "modified":
-			sb.WriteString("  ~ old: " + c.OldSig + "\n")
-			sb.WriteString("  ~ new: " + c.NewSig + "\n")
+			sb.WriteString("  ~ modified " + label + ":\n")
+			sb.WriteString("      old: " + c.OldSig + "\n")
+			sb.WriteString("      new: " + c.NewSig + "\n")
 		}
 	}
 	return sb.String()
