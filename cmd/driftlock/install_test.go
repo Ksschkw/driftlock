@@ -7,6 +7,15 @@ import (
 	"testing"
 )
 
+func anyNoteContains(notes []string, want string) bool {
+	for _, n := range notes {
+		if strings.Contains(n, want) {
+			return true
+		}
+	}
+	return false
+}
+
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -65,8 +74,8 @@ func TestInstallHookPreservesForeignHook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(notes) == 0 || !strings.Contains(notes[0], "Appended") {
-		t.Errorf("unexpected notes: %v", notes)
+	if !anyNoteContains(notes, "Appended") {
+		t.Errorf("no append note in %v", notes)
 	}
 
 	hook := readFile(t, hookPath)
@@ -94,5 +103,52 @@ func TestInstallHookRespectsHooksPath(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".husky", "pre-commit")); err != nil {
 		t.Fatalf("hook not written to core.hooksPath: %v", err)
+	}
+}
+
+// The original hook is preserved before modification, so a developer can always
+// see (and restore) what was there.
+func TestInstallHookBacksUpForeignHook(t *testing.T) {
+	dir := t.TempDir()
+	git(t, dir, "init")
+	hooksDirPath := filepath.Join(dir, ".git", "hooks")
+	if err := os.MkdirAll(hooksDirPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hookPath := filepath.Join(hooksDirPath, "pre-commit")
+	original := "#!/bin/sh\necho original\n"
+	if err := os.WriteFile(hookPath, []byte(original), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	notes, err := installPreCommitHook(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, n := range notes {
+		if strings.Contains(n, "Backed up") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no backup note in %v", notes)
+	}
+
+	backup := readFile(t, hookPath+".driftlock-backup")
+	if backup != original {
+		t.Errorf("backup content = %q, want %q", backup, original)
+	}
+
+	// A second install must not overwrite the true original backup.
+	modified := readFile(t, hookPath)
+	if _, err := installPreCommitHook(dir); err != nil {
+		t.Fatal(err)
+	}
+	if again := readFile(t, hookPath+".driftlock-backup"); again != original {
+		t.Errorf("backup was overwritten on re-install: %q", again)
+	}
+	if !strings.Contains(modified, "driftlock") {
+		t.Errorf("first install did not append driftlock: %q", modified)
 	}
 }

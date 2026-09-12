@@ -210,7 +210,7 @@ exists to prevent. **This milestone is the highest priority.**
   looks, not blindly to `.git/hooks/`.
 - [x] **M3.2 — Chain an existing pre-commit hook.** Append the Driftlock call
   to a foreign hook (husky, lint-staged, pre-commit) instead of overwriting it.
-- [ ] **M3.3 — Back up before modifying.** Preserve the original as
+- [x] **M3.3 — Back up before modifying.** Preserve the original as
   `pre-commit.driftlock-backup` with a printed note.
 - [ ] **M3.4 — Idempotent re-init.** A second `init` must not double-install or
   destroy its own prior work.
@@ -414,3 +414,6 @@ deterministic string check does perfectly, instantly, and for free.
   repo gets a standalone `exec` hook, an existing hook gets a guarded Driftlock
   block appended (no `exec`, so the rest of the hook still runs). Tests:
   `cmd/driftlock/install_test.go`.
+- **M3.3** — The original hook is copied to `pre-commit.driftlock-backup` once,
+  and a re-run never overwrites that true original. Test:
+  `TestInstallHookBacksUpForeignHook`.

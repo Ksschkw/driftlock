@@ -129,6 +129,19 @@ func installPreCommitHook(root string) ([]string, error) {
 		return []string{"Installed the pre-commit hook at " + hookPath}, nil
 	}
 
+	notes := make([]string, 0, 2)
+
+	// Preserve the original before modifying it. The backup is written at most
+	// once, so a second run never replaces the true original with an
+	// already-modified hook.
+	backupPath := hookPath + ".driftlock-backup"
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		if err := os.WriteFile(backupPath, existing, 0o755); err != nil {
+			return nil, fmt.Errorf("failed to back up the existing hook: %w", err)
+		}
+		notes = append(notes, "Backed up the previous hook to "+backupPath)
+	}
+
 	content := string(existing)
 	if !strings.HasSuffix(content, "\n") {
 		content += "\n"
@@ -137,7 +150,8 @@ func installPreCommitHook(root string) ([]string, error) {
 	if err := os.WriteFile(hookPath, []byte(content), 0o755); err != nil {
 		return nil, fmt.Errorf("failed to write hook script: %w", err)
 	}
-	return []string{"Appended Driftlock to the existing pre-commit hook at " + hookPath}, nil
+	notes = append(notes, "Appended Driftlock to the existing pre-commit hook at "+hookPath)
+	return notes, nil
 }
 
 // freshHookScript is written only when no pre-commit hook exists. It uses exec
